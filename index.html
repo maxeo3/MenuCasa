@@ -110,6 +110,8 @@
   const C_INFO = { pasta: 'Pasta', riso: 'Riso', zuppa: 'Zuppa', pane: 'Pane', patate: 'Patate', polenta: 'Polenta', pizza: 'Pizza' };
   const FISH_OK = ['tonno', 'platessa', 'merluzzo', 'polipo', 'totano', 'seppie'];
   const TARGET = { pesce: [2, 3], legumi: [2, 3], uova: [0, 2], formaggio: [0, 2], carne: [0, 3], salumi: [0, 1], verdure: [0, 2] };
+  // obiettivi settimanali per proteina [min, max]: quelli scelti in Impostazioni, altrimenti i predefiniti
+  const tgt = p => { const t = S.target?.[p]; return Array.isArray(t) ? t : (TARGET[p] || [0, 9]); };
   const BASE_WORDS = /^(olio|sale|pepe|aceto|origano|rosmarino|salvia|alloro|aglio|farina 00|pangrattato|zucchero|dado|brodo)/i;
   const PZ_G = { carote: 100, zucchine: 200, patate: 200, cipolla: 150, pomodori: 150, finocchi: 300 };
 
@@ -134,7 +136,7 @@
   //  - "condiviso": piano, spesa, ricette, impostazioni di famiglia (sincronizzati)
   //  - "locale": scheda aperta, filtri, codice famiglia (solo su questo telefono)
   // =====================================================================
-  const SHARED_SETTINGS = ['people', 'piccolo', 'pastedGrande', 'customRecipes', 'flags', 'reparti'];
+  const SHARED_SETTINGS = ['people', 'piccolo', 'pastedGrande', 'customRecipes', 'flags', 'reparti', 'target'];
   const DEFAULT_STATE = () => ({
     people: 4,
     piccolo: { season: 'auto', anchorMonday: null, anchorWeek: null },
@@ -142,6 +144,7 @@
     customRecipes: [],
     flags: {},              // { idRicetta: 'fav' | 'ban' }
     reparti: MC_REPARTI.map(r => r[0]),
+    target: {},             // { proteina: [min, max] } se diverso dal predefinito
     plan: {},               // { dataISO: { cena:{id|custom,locked}, pranzo:{...}, home:{grande,piccolo} } }
     shop: {},               // { lunedìISO: { checked:{key:true} } }  spunte degli ingredienti delle ricette
     list: {},               // lista sempre aperta: { id: { t, r, ts, note?, c? } }   (c = già nel carrello)
@@ -504,7 +507,7 @@
     if (ctx.prev?.p && group(ctx.prev.p) === g) { s -= 30; bad.push('stessa proteina del pasto prima'); }
     if (ctx.used.has(r.id)) { s -= 200; bad.push('già in settimana'); }
     else if (ctx.recent.has(r.id)) { s -= 70; bad.push('fatto da poco'); }
-    const n = ctx.counts[r.p] || 0; const [min, max] = TARGET[r.p] || [0, 9];
+    const n = ctx.counts[r.p] || 0; const [min, max] = tgt(r.p);
     if (n < min) { s += 35 - n * 8; why.push(`${P_INFO[r.p].l.toLowerCase()} in settimana: ${n} su ${min}`); }
     if (n >= max) { s -= 45; bad.push(`${P_INFO[r.p].l.toLowerCase()} già ${n} volte`); }
     if (r.c === 'pizza') { if (ctx.counts._pizza) { s -= 80; bad.push('pizza già in settimana'); } else if (ctx.dow === 5 && slot === 'cena') { s += 30; why.push('sabato pizza'); } }
@@ -737,7 +740,7 @@
       </div>
       <div class="h-1.5 rounded-full bg-sand overflow-hidden"><div class="h-full bg-sage rounded-full" style="width:${total ? Math.round(filled / total * 100) : 0}%"></div></div>
       <div class="flex flex-wrap gap-1.5">${Object.keys(TARGET).map(p => {
-        const n = c[p] || 0; const [min, max] = TARGET[p];
+        const n = c[p] || 0; const [min, max] = tgt(p);
         const st = n < min ? 'ring-2 ring-butter' : n > max ? 'ring-2 ring-accent' : '';
         return `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${P_INFO[p].cls} ${st}" title="${P_INFO[p].l}">${P_INFO[p].e} ${n}${min ? `/${min}` : ''}</span>`;
       }).join('')}</div>
@@ -981,6 +984,15 @@
         <label class="flex items-center justify-between gap-3 text-sm">Persone (per le quantità)
           <input type="number" min="1" max="12" step="1" value="${S.people}" data-input="people" class="w-20 ${sel} text-right"></label>
         <p class="text-xs text-muted">Pesce proposto solo tra: ${FISH_OK.join(', ')}.</p>`),
+      box('Proteine della settimana', 'fa-scale-balanced', `
+        <p class="text-xs text-muted">Quante volte a settimana (pranzi del weekend e cene): almeno / al massimo. "Proponi" ne tiene conto.</p>
+        <div class="space-y-1">${Object.keys(TARGET).map(p => { const [min, max] = tgt(p); return `
+          <div class="flex items-center gap-2 bg-cream rounded-2xl pl-3 pr-2 py-1.5 text-sm">
+            <span class="flex-1">${P_INFO[p].e} ${P_INFO[p].l}</span>
+            <label class="text-xs text-muted">min <input type="number" min="0" max="14" step="1" value="${min}" data-input="target" data-p="${p}" data-k="0" class="w-14 ${sel} bg-card text-right"></label>
+            <label class="text-xs text-muted">max <input type="number" min="0" max="14" step="1" value="${max}" data-input="target" data-p="${p}" data-k="1" class="w-14 ${sel} bg-card text-right"></label>
+          </div>`; }).join('')}</div>
+        ${Object.keys(S.target || {}).length ? `<button data-action="target-reset" class="text-xs text-muted underline">Torna ai valori predefiniti</button>` : ''}`),
       box('Giro reparti Esselunga', 'fa-route', `
         <p class="text-xs text-muted">Metti i reparti nell'ordine in cui li incontri al negozio: la lista segue questo giro.</p>
         <ul class="space-y-1">${S.reparti.map((k, i) => `<li class="flex items-center gap-2 bg-cream rounded-2xl pl-3 pr-1 py-1 text-sm">
@@ -1190,6 +1202,7 @@
       }
       case 'share': shareText(shopText(), 'Lista copiata: incollala su WhatsApp'); break;
       case 'rfilter': recipeFilter.p = el.dataset.p; render(); break;
+      case 'target-reset': S.target = {}; save(); Sync.settings(); render(); toast('Valori predefiniti'); break;
       case 'flag': { const id = el.dataset.id, f = el.dataset.f; S.flags[id] === f ? delete S.flags[id] : (S.flags[id] = f); save(); Sync.settings(); render(); break; }
       case 'recipe': openRecipe(el.dataset.id); break;
       case 'new-recipe': openRecipeEditor(null); break;
@@ -1279,6 +1292,14 @@
     switch (el.dataset.input) {
       case 'piccolo-week': S.piccolo.anchorMonday = iso(mondayOf(new Date())); S.piccolo.anchorWeek = +el.value; save(); Sync.settings(); toast(`Nido: settimana ${el.value}`); render(); break;
       case 'piccolo-season': S.piccolo.season = el.value; save(); Sync.settings(); render(); break;
+      case 'target': {
+        const p = el.dataset.p, k = +el.dataset.k; const v = tgt(p).slice();
+        v[k] = Math.max(0, Math.min(14, Math.round(+el.value) || 0));
+        if (k === 0 && v[1] < v[0]) v[1] = v[0]; if (k === 1 && v[0] > v[1]) v[0] = v[1];
+        S.target = { ...(S.target || {}) };
+        if (v.join() === TARGET[p].join()) delete S.target[p]; else S.target[p] = v;
+        save(); Sync.settings(); render(); break;
+      }
       case 'people': S.people = Math.max(1, Math.min(12, +el.value || 4)); save(); Sync.settings(); break;
       case 'import': {
         const file = el.files[0]; if (!file) return;
