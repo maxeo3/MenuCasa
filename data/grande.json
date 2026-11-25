@@ -1,0 +1,130 @@
+{
+ "source": "https://www.angeli-custodi.com/cosa-si-mangia",
+ "updated": "2026-11-25T16:50",
+ "weeks": {
+  "2026-11-16": {
+   "label": "Terza Settimana",
+   "range": "dal 16/11 al 20/11",
+   "days": [
+    [
+     "Risotto con la zucca",
+     "Frittata al forno con verdure invernali",
+     "Carote"
+    ],
+    [
+     "Pastina in brodo vegetale",
+     "Scaloppine di tacchino al limone",
+     "Patate lesse e cappuccio"
+    ],
+    [
+     "Pasta e fagioli",
+     "Lattuga e carote al vapore",
+     "Yogurt"
+    ],
+    [
+     "Pasta all'olio",
+     "Brasato di vitellone",
+     "Finocchio"
+    ],
+    [
+     "Pasta alla pizzaiola",
+     "Filetto di merluzzo al forno",
+     "Cappuccio"
+    ]
+   ]
+  },
+  "2026-11-23": {
+   "label": "Prima Settimana",
+   "range": "dal 23/11 al 27/11",
+   "days": [
+    [
+     "Pasta con piselli",
+     "Prosciutto cotto",
+     "Finocchio"
+    ],
+    [
+     "Minestrone autunno/inverno",
+     "Frittata",
+     "Cappuccio"
+    ],
+    [
+     "Crema di zucca",
+     "Pizza margherita",
+     "Lattuga"
+    ],
+    [
+     "Riso alla parmigiana",
+     "Cotoletta di pollo",
+     "Carote"
+    ],
+    [
+     "Pasta al pomodoro",
+     "Polpette di pesce",
+     "Carote e lattuga"
+    ]
+   ]
+  },
+  "2026-11-30": {
+   "label": "Prima Settimana",
+   "range": "dal 30/11 al 04/12",
+   "days": [
+    [
+     "Pasta olio e grana",
+     "Mozzarella",
+     "Carote al vapore"
+    ],
+    [
+     "Minestrone autunno/inverno",
+     "Cotoletta di pollo",
+     "Patate al forno e lattuga"
+    ],
+    [
+     "Pasta al pomodoro",
+     "Frittata al forno con verdure invernali",
+     "Finocchio al vapore"
+    ],
+    [
+     "Spezzatino di manzo con polenta",
+     "Piselli all'olio",
+     "Lattuga e carote"
+    ],
+    [
+     "Riso e latte",
+     "Polpette di pesce",
+     "Cappuccio"
+    ]
+   ]
+  },
+  "2026-12-07": {
+   "label": "Quarta Settimana",
+   "range": "dal 09/12 al 11/12",
+   "days": [
+    [
+     "Pasta all'ortolana",
+     "Filetto di halibut al forno",
+     "Finocchio"
+    ],
+    [
+     "Pasta al pomodoro e ricotta",
+     "Spinaci saltati",
+     "Carote"
+    ],
+    [
+     "Passato di fagioli con riso",
+     "Frittata",
+     "Lattuga"
+    ],
+    [
+     "Crema di carote e porri con pastina",
+     "Bocconcini di pollo",
+     "Patate lessate"
+    ],
+    [
+     "Pasta all'olio",
+     "Crocchette di merluzzo gratinate al forno",
+     "Coste al limone"
+    ]
+   ]
+  }
+ }
+}

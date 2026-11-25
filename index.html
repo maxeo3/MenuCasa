@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MenuCasa - Cene e spesa della settimana</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { serif: ['Fraunces', 'Georgia', 'serif'], sans: ['Nunito', 'system-ui', 'sans-serif'] },
+          colors: {
+            paper: '#F6F0E6', card: '#FFFDF9', cream: '#FAF5EC', sand: '#EFE4D3', sand2: '#E6D7C1', line: '#E7DAC6',
+            ink: '#3B2F26', muted: '#8C7B6B',
+            accent: '#D4643B', accentdk: '#B04E28', accentlt: '#FBE6DC',
+            sage: '#6F8F60', sagedk: '#55744A', sagelt: '#E5EEDD', butter: '#F3C755'
+          },
+          boxShadow: { soft: '0 1px 2px rgba(59,47,38,.06), 0 4px 14px rgba(59,47,38,.06)' }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F6F0E6">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  </script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; background: #F6F0E6; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    .sheet { animation: up .18s ease-out; }
+    @keyframes up { from { transform: translateY(40px); opacity: 0 } to { transform: none; opacity: 1 } }
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    .chk:checked + span { text-decoration: line-through; opacity: .45; }
+    .paper-dots { background-image: radial-gradient(rgba(140,123,107,.12) 1px, transparent 1px); background-size: 14px 14px; }
+  </style>
+</head>
+<body class="text-ink min-h-screen font-sans paper-dots">
+
+  <header class="sticky top-0 z-40 bg-paper/90 backdrop-blur border-b border-line">
+    <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-accent text-white grid place-items-center shadow-soft">
+        <i class="fa-solid fa-kitchen-set"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h1 class="font-serif text-xl font-bold leading-none">Menu<span class="text-accent">Casa</span></h1>
+        <p class="text-[11px] text-muted truncate mt-0.5"><span id="syncBadge"></span></p>
+      </div>
+      <div id="weekNav" class="flex items-center bg-card border border-line rounded-full shadow-soft">
+        <button data-action="week-prev" class="w-9 h-9 rounded-full hover:bg-sand" aria-label="Settimana precedente"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+        <button data-action="week-today" class="h-9 px-1 text-xs font-bold" id="weekLabel">—</button>
+        <button data-action="week-next" class="w-9 h-9 rounded-full hover:bg-sand" aria-label="Settimana successiva"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="view" class="max-w-xl mx-auto px-4 pt-4 pb-28 space-y-3"></main>
+
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-line safe-bottom">
+    <div class="max-w-xl mx-auto grid grid-cols-4 text-[11px] font-bold">
+      <button data-tab="week" class="tabbtn"><i class="fa-solid fa-calendar-days"></i>Settimana</button>
+      <button data-tab="shop" class="tabbtn"><i class="fa-solid fa-basket-shopping"></i>Spesa</button>
+      <button data-tab="recipes" class="tabbtn"><i class="fa-solid fa-book-bookmark"></i>Ricette</button>
+      <button data-tab="settings" class="tabbtn"><i class="fa-solid fa-sliders"></i>Impostazioni</button>
+    </div>
+  </nav>
+
+  <div id="modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-ink/40" data-action="close-modal"></div>
+    <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto sheet">
+      <div id="modalBody" class="max-w-xl mx-auto bg-card border border-line rounded-t-3xl p-4 pb-8 shadow-soft"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 hidden bg-ink text-paper text-sm font-semibold px-4 py-2 rounded-full shadow-lg"></div>
+
+  <script src="recipes.js"></script>
+  <script src="catalog.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+  'use strict';
+  // =====================================================================
+  //  Costanti e utilità
+  // =====================================================================
+  const STORE_KEY = 'menucasa-v2';
+  const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+  const GG = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+  const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  const KIDS = {
+    grande:  { n: 'Il grande',  e: '🎒', where: 'scuola' },
+    piccolo: { n: 'Il piccolo', e: '🧸', where: 'nido' }
+  };
+  const P_INFO = {
+    pesce:     { e: '🐟', l: 'Pesce',     cls: 'bg-sky-100 text-sky-800' },
+    carne:     { e: '🍗', l: 'Carne',     cls: 'bg-rose-100 text-rose-800' },
+    salumi:    { e: '🥓', l: 'Salumi',    cls: 'bg-pink-100 text-pink-800' },
+    uova:      { e: '🥚', l: 'Uova',      cls: 'bg-yellow-100 text-yellow-800' },
+    legumi:    { e: '🫘', l: 'Legumi',    cls: 'bg-amber-100 text-amber-800' },
+    formaggio: { e: '🧀', l: 'Formaggio', cls: 'bg-orange-100 text-orange-800' },
+    verdure:   { e: '🥦', l: 'Verdure',   cls: 'bg-lime-100 text-lime-800' }
+  };
+  const C_INFO = { pasta: 'Pasta', riso: 'Riso', zuppa: 'Zuppa', pane: 'Pane', patate: 'Patate', polenta: 'Polenta', pizza: 'Pizza' };
+  const FISH_OK = ['tonno', 'platessa', 'merluzzo', 'polipo', 'totano', 'seppie'];
+  const TARGET = { pesce: [2, 3], legumi: [2, 3], uova: [0, 2], formaggio: [0, 2], carne: [0, 3], salumi: [0, 1], verdure: [0, 2] };
+  const BASE_WORDS = /^(olio|sale|pepe|aceto|origano|rosmarino|salvia|alloro|aglio|farina 00|pangrattato|zucchero|dado|brodo)/i;
+  const PZ_G = { carote: 100, zucchine: 200, patate: 200, cipolla: 150, pomodori: 150, finocchi: 300 };
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parseIso = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return addDays(x, -((x.getDay() + 6) % 7)); };
+  const fmtD = d => `${d.getDate()} ${MESI[d.getMonth()]}`;
+  const dowOf = d => (d.getDay() + 6) % 7;
+  const todayIso = () => iso(new Date());
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2400);
+  }
+
+  // =====================================================================
+  //  Stato
+  //  - "condiviso": piano, spesa, ricette, impostazioni di famiglia (sincronizzati)
+  //  - "locale": scheda aperta, filtri, codice famiglia (solo su questo telefono)
+  // =====================================================================
+  const SHARED_SETTINGS = ['people', 'piccolo', 'pastedGrande', 'customRecipes', 'flags', 'reparti'];
+  const DEFAULT_STATE = () => ({
+    people: 4,
+    piccolo: { season: 'auto', anchorMonday: null, anchorWeek: null },
+    pastedGrande: {},       // settimane del grande incollate a mano: { lunedìISO: {label, days:[[...]]} }
+    customRecipes: [],
+    flags: {},              // { idRicetta: 'fav' | 'ban' }
+    reparti: MC_REPARTI.map(r => r[0]),
+    plan: {},               // { dataISO: { cena:{id|custom,locked}, pranzo:{...}, home:{grande,piccolo} } }
+    shop: {},               // { lunedìISO: { checked:{key:true} } }  spunte degli ingredienti delle ricette
+    list: {},               // lista sempre aperta: { id: { t, r, ts, note?, c? } }   (c = già nel carrello)
+    hist: {},               // prodotti comprati: { chiave: { t, r, n, last } } -> "I soliti" e "recenti"
+    // locali
+    tab: 'week', showChecked: true, shopPast: false, family: null
+  });
+  let S;
+  function load() {
+    try { S = Object.assign(DEFAULT_STATE(), JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); }
+    catch { S = DEFAULT_STATE(); }
+    fixReparti();
+    // vecchie voci aggiunte a mano (legate alla settimana) -> lista sempre aperta
+    Object.values(S.shop).forEach(w => {
+      Object.entries(w.extras || {}).forEach(([id, x]) => { S.list[id] = { t: x.t, r: x.r, ts: x.ts || Date.now() }; });
+      delete w.extras;
+    });
+    seedSoliti();
+  }
+  // "I soliti" di partenza (dai prodotti più usati in Bring!), aggiunti solo se mancano
+  function seedSoliti() {
+    (window.MC_SOLITI || []).forEach((t, i) => {
+      const k = histKey(t); if (S.hist[k]) return;
+      const c = catFind(t); S.hist[k] = { t, r: c?.r || guessReparto(t), n: 3, last: 0, o: i };
+    });
+  }
+
+  // =====================================================================
+  //  Catalogo prodotti
+  // =====================================================================
+  const CAT = Object.entries(window.MC_CATALOG || {}).flatMap(([r, arr]) => arr.map(s => { const [t, e] = s.split('|'); return { t, e, r }; }));
+  const CAT_BY = new Map(CAT.map(c => [c.t.toLowerCase(), c]));
+  const catFind = t => CAT_BY.get(String(t).toLowerCase().trim()) || null;
+  const histKey = t => String(t).toLowerCase().trim().replace(/[^a-z0-9àèéìòù]+/g, '_');
+  function emojiOf(t, r) {
+    const c = catFind(t); if (c) return c.e;
+    const w = String(t).toLowerCase().split(/\s+/)[0];
+    const p = CAT.find(x => x.t.toLowerCase().startsWith(w));
+    return p ? p.e : (MC_REPARTI.find(x => x[0] === r)?.[2] || '🛒');
+  }
+  // reparti: se l'ordine è ancora quello vecchio di default passa a quello delle corsie; i reparti nuovi si inseriscono al loro posto
+  function fixReparti() {
+    const def = MC_REPARTI.map(r => r[0]);
+    if (!Array.isArray(S.reparti) || S.reparti.join() === (window.MC_REPARTI_OLD || []).join()) { S.reparti = def; return; }
+    S.reparti = S.reparti.filter(k => def.includes(k));
+    def.forEach((k, i) => { if (!S.reparti.includes(k)) { const prev = def.slice(0, i).reverse().find(x => S.reparti.includes(x)); S.reparti.splice(prev ? S.reparti.indexOf(prev) + 1 : 0, 0, k); } });
+  }
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch { toast('Impossibile salvare: memoria piena?'); } }
+
+  // =====================================================================
+  //  Sincronizzazione tra telefoni (Firebase Firestore)
+  //  families/{codice}                 -> { settings: JSON, updated }
+  //  families/{codice}/days/{data}     -> { cena, pranzo, home }
+  //  families/{codice}/shop/{lunedì}   -> { checked:{}, extras:{} }
+  // =====================================================================
+  const FB_VER = '10.12.2';
+  const Sync = {
+    on: false, state: 'off', fs: null, db: null, root: null, unsub: [],
+    get available() { return !!window.MC_FIREBASE; },
+
+    async start() {
+      if (!this.available || !S.family || this.on) return;
+      this.set('connecting');
+      try {
+        const base = `https://www.gstatic.com/firebasejs/${FB_VER}`;
+        const [{ initializeApp, getApps }, auth, fs] = await Promise.all([
+          import(`${base}/firebase-app.js`), import(`${base}/firebase-auth.js`), import(`${base}/firebase-firestore.js`)]);
+        const app = getApps()[0] || initializeApp(window.MC_FIREBASE);
+        await auth.signInAnonymously(auth.getAuth(app));
+        let db;
+        try { db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache() }); } catch { db = fs.getFirestore(app); }
+        Object.assign(this, { fs, db, root: fs.doc(db, 'families', S.family), on: true });
+        await this.bootstrap();
+        this.listen();
+      } catch (e) {
+        console.error(e); this.on = false; this.set('error');
+      }
+    },
+
+    // Prima connessione: se la famiglia esiste prendo i suoi dati, altrimenti carico i miei
+    async bootstrap() {
+      const { fs } = this;
+      const snap = await fs.getDoc(this.root);
+      if (snap.exists()) return;
+      const batch = fs.writeBatch(this.db);
+      batch.set(this.root, this.settingsPayload());
+      Object.entries(S.plan).forEach(([d, v]) => batch.set(fs.doc(this.root, 'days', d), v));
+      Object.entries(S.shop).forEach(([w, v]) => batch.set(fs.doc(this.root, 'shop', w), v));
+      batch.set(fs.doc(this.root, 'misc', 'list'), { items: S.list, hist: S.hist });
+      await batch.commit();
+    },
+
+    listen() {
+      const { fs } = this; const opt = { includeMetadataChanges: true };
+      this.meta = {};
+      this.unsub.push(fs.onSnapshot(this.root, opt, s => {
+        if (s.exists() && !s.metadata.hasPendingWrites) {
+          try { const data = JSON.parse(s.data().settings || '{}'); SHARED_SETTINGS.forEach(k => { if (k in data) S[k] = data[k]; }); } catch {}
+          fixReparti();
+        }
+        this.changed('settings', s);
+      }, e => this.fail(e)));
+      this.unsub.push(fs.onSnapshot(fs.collection(this.root, 'days'), opt, q => {
+        const plan = {}; q.forEach(doc => { plan[doc.id] = doc.data(); }); S.plan = plan; this.changed('days', q);
+      }, e => this.fail(e)));
+      this.unsub.push(fs.onSnapshot(fs.collection(this.root, 'shop'), opt, q => {
+        const shop = {}; q.forEach(doc => { const v = doc.data(); shop[doc.id] = { checked: v.checked || {} }; }); S.shop = shop; this.changed('shop', q);
+      }, e => this.fail(e)));
+      this.unsub.push(fs.onSnapshot(fs.doc(this.root, 'misc', 'list'), opt, s => {
+        const v = s.exists() ? s.data() : {};
+        S.list = v.items || {}; if (v.hist) { S.hist = v.hist; seedSoliti(); } this.changed('list', s);
+      }, e => this.fail(e)));
+    },
+
+    // stato complessivo: il peggiore tra i tre ascoltatori
+    changed(key, snap) {
+      this.meta[key] = snap.metadata;
+      const m = Object.values(this.meta);
+      save();
+      this.set(m.some(x => x.hasPendingWrites) ? 'pending' : (m.length < 4 || m.some(x => x.fromCache)) ? 'offline' : 'ok');
+      scheduleRender();
+      if (key === 'list') refreshCatalog(false);
+    },
+    fail(e) { console.error(e); this.set('error'); },
+    stop() { this.unsub.forEach(u => u()); this.unsub = []; this.on = false; this.set('off'); },
+    set(st) { this.state = st; renderSyncBadge(); },
+
+    settingsPayload() {
+      const o = {}; SHARED_SETTINGS.forEach(k => { o[k] = S[k]; });
+      return { settings: JSON.stringify(o), updated: Date.now() };
+    },
+    // ---- scritture (no-op se la sincronizzazione è spenta) ----
+    days(dates) {
+      if (!this.on) return;
+      const { fs } = this; const batch = fs.writeBatch(this.db);
+      dates.forEach(d => {
+        const ref = fs.doc(this.root, 'days', d); const v = S.plan[d];
+        if (v && Object.keys(v).length) batch.set(ref, JSON.parse(JSON.stringify(v))); else batch.delete(ref);
+      });
+      batch.commit().catch(e => this.fail(e));
+    },
+    settings() { if (this.on) this.fs.setDoc(this.root, this.settingsPayload()).catch(e => this.fail(e)); },
+    shopPatch(week, patch) {
+      if (!this.on) return;
+      this.fs.setDoc(this.fs.doc(this.root, 'shop', week), patch, { merge: true }).catch(e => this.fail(e));
+    },
+    shopCheck(week, key, val) { if (this.on) this.shopPatch(week, { checked: { [key]: val ? true : this.fs.deleteField() } }); },
+    shopReplaceChecked(week) {
+      if (!this.on) return;
+      this.fs.setDoc(this.fs.doc(this.root, 'shop', week), { checked: {} }, { mergeFields: ['checked'] }).catch(e => this.fail(e));
+    },
+    // lista sempre aperta: patch(del) riceve deleteField per cancellare un campo
+    list(fn) {
+      if (!this.on) return;
+      const patch = fn(() => this.fs.deleteField());
+      this.fs.setDoc(this.fs.doc(this.root, 'misc', 'list'), patch, { merge: true }).catch(e => this.fail(e));
+    }
+  };
+
+  function renderSyncBadge() {
+    const b = $('#syncBadge'); if (!b) return;
+    const map = {
+      off: S.family ? ['fa-cloud', 'text-muted', 'sincronizzazione spenta'] : ['fa-mobile-screen', 'text-muted', 'solo su questo telefono'],
+      connecting: ['fa-cloud-arrow-up', 'text-muted', 'mi collego…'],
+      ok: ['fa-cloud', 'text-sage', 'sincronizzato con la famiglia'],
+      pending: ['fa-cloud-arrow-up', 'text-butter', 'invio modifiche…'],
+      offline: ['fa-cloud', 'text-muted', 'offline: invio appena c\'è rete'],
+      error: ['fa-triangle-exclamation', 'text-accent', 'errore di sincronizzazione']
+    };
+    const [i, c, t] = map[Sync.state] || map.off;
+    b.innerHTML = `<i class="fa-solid ${i} ${c} mr-1"></i>${t}`;
+  }
+
+  const FAMILY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function newFamilyCode() {
+    const a = new Uint32Array(12); crypto.getRandomValues(a);
+    const s = [...a].map(n => FAMILY_ALPHABET[n % FAMILY_ALPHABET.length]).join('');
+    return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+  }
+  const normCode = c => (c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(.{4})(?=.)/g, '$1-');
+  function familyLink() { return `${location.origin}${location.pathname}#famiglia=${S.family}`; }
+
+  // =====================================================================
+  //  Menù scolastici
+  // =====================================================================
+  let PICCOLO = null, GRANDE = { weeks: {} };
+  let weekStart = mondayOf(new Date());
+
+  async function loadMenus() {
+    const get = async (u) => { try { const r = await fetch(u, { cache: 'no-cache' }); return r.ok ? r.json() : null; } catch { return null; } };
+    const [p, g] = await Promise.all([get('data/piccolo.json'), get('data/grande.json')]);
+    PICCOLO = p; if (g) GRANDE = g;
+  }
+
+  function piccoloSeason(date) {
+    if (S.piccolo.season !== 'auto') return S.piccolo.season;
+    const m = date.getMonth() + 1;
+    return (m >= 10 || m <= 4) ? 'ai' : 'pe';
+  }
+  function piccoloWeek(monday) {
+    if (!PICCOLO) return null;
+    const am = S.piccolo.anchorMonday || PICCOLO.anchor.monday;
+    const aw = S.piccolo.anchorWeek || PICCOLO.anchor.week;
+    const diff = Math.round((monday - parseIso(am)) / (7 * 864e5));
+    return (((aw - 1 + diff) % 4) + 4) % 4 + 1;
+  }
+  function piccoloDay(date) {
+    const dow = dowOf(date);
+    if (!PICCOLO || dow > 4) return null;
+    const w = piccoloWeek(mondayOf(date)); const season = PICCOLO.seasons[piccoloSeason(date)];
+    return { week: w, season: season.name, dishes: season.pranzo[w - 1][dow], merenda: season.merenda?.[w - 1]?.[dow] };
+  }
+  function grandeWeekData(monday) {
+    const k = iso(monday);
+    return S.pastedGrande[k] || GRANDE.weeks?.[k] || null;
+  }
+  function grandeDay(date) {
+    const dow = dowOf(date);
+    if (dow > 4) return null;
+    const w = grandeWeekData(mondayOf(date));
+    const dishes = w?.days?.[dow] || [];
+    return dishes.length ? { label: w.label, dishes } : { missing: true };
+  }
+
+  // Parser del testo copiato dal sito della scuola (stessa logica di scripts/scrape_grande.py)
+  function parseGrandeText(text) {
+    const lines = text.replace(/ /g, ' ').split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim());
+    const dayRe = /^(LUNED|MARTED|MERCOLED|GIOVED|VENERD)[IÌ]\s*['’`]?\s*$/i;
+    const rangeRe = /dal\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+al\s+(\d{1,2})\/(\d{1,2})/i;
+    const idx = { LUNED: 0, MARTED: 1, MERCOLED: 2, GIOVED: 3, VENERD: 4 };
+    const now = new Date(); const weeks = {};
+    let cur = null, day = null, label = '';
+    for (const ln of lines) {
+      if (!ln) { if (cur && day !== null && cur.days[day].length) day = null; continue; }
+      if (/SETTIMANA/i.test(ln) && ln.length < 40) { label = ln; continue; }
+      const m = ln.match(rangeRe);
+      if (m) {
+        const d0 = +m[1], m0 = +m[2];
+        const first = m[3] ? new Date(+m[3] + (m[3].length === 2 ? 2000 : 0), m0 - 1, d0)
+          : [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
+            .map(y => new Date(y, m0 - 1, d0)).sort((a, b) => Math.abs(a - now) - Math.abs(b - now))[0];
+        cur = { label: label.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()), range: m[0], days: [[], [], [], [], []] };
+        weeks[iso(mondayOf(first))] = cur; day = null; continue;
+      }
+      if (/^MENU/i.test(ln)) { day = null; continue; }
+      const dm = ln.match(dayRe);
+      if (dm && cur) { day = idx[dm[1].toUpperCase()]; continue; }
+      if (cur && day !== null && cur.days[day].length < 5 && ln.length < 80) cur.days[day].push(ln);
+    }
+    for (const k of Object.keys(weeks)) if (!weeks[k].days.some(d => d.length)) delete weeks[k];
+    return weeks;
+  }
+
+  // =====================================================================
+  //  Classificazione dei piatti
+  // =====================================================================
+  function tagsOf(text) {
+    const t = text.toLowerCase();
+    const tags = new Set();
+    const fish = /pesce|merluzzo|platessa|halibut|tonno|salmone|polpo|polipo|totan|seppi|nasello|orata|branzino|sgombr|alici|gamber|calamar/.test(t);
+    if (fish) tags.add('pesce');
+    if (/pollo|tacchino|manzo|vitell|maiale|brasato|bollito|spezzatino|salsicc|cotolett|scaloppin|hamburger|arrosto|\bcarne\b|lonza|fesa/.test(t) && !/brodo di carne$/.test(t)) tags.add('carne');
+    if (!fish && /ragù|ragu/.test(t)) tags.add('carne');
+    if (/prosciutto|speck|bresaola|salame|mortadella|wurstel|würstel|pancetta/.test(t)) tags.add('salumi');
+    if (/\buov|frittat/.test(t)) tags.add('uova');
+    if (/fagiol(?!ini)|\bcec[ie]\b|lenticch|piselli|legumi|borlott|cannellin|\bfave\b/.test(t)) tags.add('legumi');
+    if (/mozzarell|stracchino|asiago|robiola|crescenza|caciott|formagg|fontina|scamorza|ricotta|pizza margherita|montasio|emmental/.test(t)) tags.add('formaggio');
+    const primo = /pasta|pastina|spaghett|maccheron|riso\b|risott|\borzo\b|gnocchi|lasagn|polenta|pizza|tortellin|ravioli/.test(t);
+    return { tags, primo, pizza: /pizza/.test(t) };
+  }
+  const group = p => (p === 'salumi' ? 'carne' : p);
+
+  function lunchInfo(dateIsoStr) {
+    const date = parseIso(dateIsoStr);
+    const home = S.plan[dateIsoStr]?.home || {};
+    const out = { tags: new Set(), primo: false, pizza: false, kids: [] };
+    const add = (who, d) => {
+      if (!d || d.missing) return;
+      d.dishes.forEach(x => { const r = tagsOf(x); r.tags.forEach(t => out.tags.add(group(t))); out.primo ||= r.primo; out.pizza ||= r.pizza; });
+      out.kids.push(who);
+    };
+    if (!home.grande) add('grande', grandeDay(date));
+    if (!home.piccolo) add('piccolo', piccoloDay(date));
+    return out;
+  }
+
+  // =====================================================================
+  //  Ricette
+  // =====================================================================
+  function allRecipes() {
+    const map = new Map(MC_RECIPES.map(r => [r.id, r]));
+    S.customRecipes.forEach(r => map.set(r.id, r));
+    return [...map.values()];
+  }
+  const recipeById = id => allRecipes().find(r => r.id === id) || null;
+  const isFishOk = r => r.p !== 'pesce' || !r.fish || FISH_OK.includes(r.fish);
+
+  // =====================================================================
+  //  Pianificazione
+  // =====================================================================
+  const SPECIAL = {
+    avanzi: { n: 'Avanzi / svuota frigo', e: '♻️' },
+    fuori: { n: 'Fuori o pizzeria', e: '🍕' }
+  };
+  function slotsOf(dateIsoStr) {
+    const dow = dowOf(parseIso(dateIsoStr));
+    const home = S.plan[dateIsoStr]?.home || {};
+    const s = [];
+    if (dow >= 5 || home.grande || home.piccolo) s.push('pranzo');
+    s.push('cena');
+    return s;
+  }
+  function weekDays(monday) { return [...Array(7)].map((_, i) => iso(addDays(monday, i))); }
+  const entry = (d, slot) => S.plan[d]?.[slot] || null;
+  function entryRecipe(e) { return e && e.id && !SPECIAL[e.id] ? recipeById(e.id) : null; }
+  function setEntry(d, slot, val) {
+    S.plan[d] = S.plan[d] || {};
+    if (val) S.plan[d][slot] = val; else delete S.plan[d][slot];
+  }
+
+  function weekCounts(monday, exclude) {
+    const c = {}; const used = new Set();
+    weekDays(monday).forEach(d => slotsOf(d).forEach(slot => {
+      if (exclude && exclude[0] === d && exclude[1] === slot) return;
+      const r = entryRecipe(entry(d, slot));
+      if (r) { c[r.p] = (c[r.p] || 0) + 1; used.add(r.id); if (r.c === 'pizza') c._pizza = (c._pizza || 0) + 1; }
+    }));
+    return { c, used };
+  }
+  function prevMeal(d, slot) {
+    if (slot === 'cena' && slotsOf(d).includes('pranzo')) return entryRecipe(entry(d, 'pranzo'));
+    return entryRecipe(entry(iso(addDays(parseIso(d), -1)), 'cena'));
+  }
+  function recentlyUsed(d, days) {
+    const ids = new Set(); const base = parseIso(d);
+    for (let i = 1; i <= days; i++) {
+      const x = iso(addDays(base, -i));
+      ['pranzo', 'cena'].forEach(s => { const e = entry(x, s); if (e?.id) ids.add(e.id); });
+    }
+    return ids;
+  }
+
+  function scoreRecipe(r, d, slot, ctx) {
+    let s = 0; const why = []; const bad = [];
+    if (S.flags[r.id] === 'ban') return { s: -1e9, why, bad: ['segnata "mai più"'] };
+    if (!isFishOk(r)) { s -= 500; bad.push('pesce non gradito'); }
+    const g = group(r.p);
+    if (slot === 'cena') {
+      if (ctx.lunch.tags.has(g)) { s -= 100; bad.push(`${P_INFO[r.p].l.toLowerCase()} già a pranzo`); }
+      if (ctx.lunch.pizza && r.c === 'pizza') { s -= 120; bad.push('pizza già a pranzo'); }
+      if (ctx.lunch.primo && (r.c === 'pasta' || r.c === 'riso')) { s -= 60; bad.push('primo già a pranzo'); }
+      if (ctx.lunch.kids.length && !ctx.lunch.tags.has(g) && g !== 'verdure') why.push('diverso dal pranzo');
+      if (r.s === 'p') s -= 35;
+    } else {
+      if (r.s === 'p') { s += 15; why.push('piatto da pranzo'); } else s -= 5;
+    }
+    if (ctx.prev && group(ctx.prev.p) === g) { s -= 30; bad.push('stessa proteina del pasto prima'); }
+    if (ctx.used.has(r.id)) { s -= 200; bad.push('già in settimana'); }
+    else if (ctx.recent.has(r.id)) { s -= 70; bad.push('fatto da poco'); }
+    const n = ctx.counts[r.p] || 0; const [min, max] = TARGET[r.p] || [0, 9];
+    if (n < min) { s += 35 - n * 8; why.push(`${P_INFO[r.p].l.toLowerCase()} in settimana: ${n} su ${min}`); }
+    if (n >= max) { s -= 45; bad.push(`${P_INFO[r.p].l.toLowerCase()} già ${n} volte`); }
+    if (r.c === 'pizza') { if (ctx.counts._pizza) { s -= 80; bad.push('pizza già in settimana'); } else if (ctx.dow === 5 && slot === 'cena') { s += 30; why.push('sabato pizza'); } }
+    if (S.flags[r.id] === 'fav') { s += 15; why.push('preferita'); }
+    return { s, why, bad };
+  }
+
+  function contextFor(d, slot) {
+    const lunch = slot === 'cena' && slotsOf(d).includes('pranzo')
+      ? (() => { const r = entryRecipe(entry(d, 'pranzo')); const o = { tags: new Set(), primo: false, pizza: false, kids: [] };
+                 if (r) { o.tags.add(group(r.p)); o.primo = ['pasta', 'riso', 'pizza'].includes(r.c); o.pizza = r.c === 'pizza'; o.kids = ['casa']; } return o; })()
+      : lunchInfo(d);
+    const { c, used } = weekCounts(mondayOf(parseIso(d)), [d, slot]);
+    return { lunch, counts: c, used, prev: prevMeal(d, slot), recent: recentlyUsed(d, 10), dow: dowOf(parseIso(d)) };
+  }
+  function ranked(d, slot) {
+    const ctx = contextFor(d, slot);
+    return allRecipes().map(r => ({ r, ...scoreRecipe(r, d, slot, ctx) })).sort((a, b) => b.s - a.s);
+  }
+  function pickFor(d, slot) {
+    const list = ranked(d, slot).filter(x => x.s > -150);
+    if (!list.length) return null;
+    const top = list.slice(0, 4); const best = top[0].s;
+    const pool = top.filter(x => x.s >= best - 25);
+    return pool[Math.floor(Math.random() * pool.length)].r;
+  }
+  function generateWeek(monday, all) {
+    let n = 0; const touched = [];
+    weekDays(monday).forEach(d => slotsOf(d).forEach(slot => {
+      const e = entry(d, slot);
+      if (e && (e.locked || !all)) return;
+      setEntry(d, slot, null);
+      const r = pickFor(d, slot);
+      if (r) { setEntry(d, slot, { id: r.id, locked: false }); n++; }
+      touched.push(d);
+    }));
+    save(); Sync.days([...new Set(touched)]); return n;
+  }
+
+  // =====================================================================
+  //  Lista della spesa
+  // =====================================================================
+  function guessReparto(name) {
+    const t = name.toLowerCase();
+    if (BASE_WORDS.test(t)) return 'base';
+    for (const k of S.reparti) { const h = MC_REPARTO_HINTS[k]; if (h && new RegExp(h).test(t)) return k; }
+    return 'altro';
+  }
+  function fmtQty(q, u) {
+    if (!q) return '';
+    if (u === 'g' && q >= 1000) return `${(q / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} kg`;
+    if (u === 'ml' && q >= 1000) return `${(q / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} l`;
+    if (u === 'g' || u === 'ml') return `${Math.round(q / 10) * 10} ${u}`;
+    return `${Math.ceil(q)} ${u === 'pz' ? '' : u}`.trim();
+  }
+  const shopDays = monday => { const t = todayIso(); return weekDays(monday).filter(d => S.shopPast || d >= t); };
+  function shopItems(monday) {
+    const k = S.people / 4; const items = new Map();
+    shopDays(monday).forEach(d => slotsOf(d).forEach(slot => {
+      const r = entryRecipe(entry(d, slot)); if (!r) return;
+      r.ing.forEach(([name, q, u, rep]) => {
+        const w = PZ_G[name.toLowerCase()];
+        if (u === 'pz' && w) { q = q * w; u = 'g'; }
+        const key = `${name.toLowerCase()}|${u || ''}`;
+        const it = items.get(key) || { key, name, u: u || '', q: 0, rep: rep || guessReparto(name), uses: [] };
+        it.q += (q || 0) * k; it.uses.push(`${GG[dowOf(parseIso(d))]} ${slot}`);
+        items.set(key, it);
+      });
+    }));
+    return [...items.values()];
+  }
+  function shopState(monday) {
+    const k = iso(monday);
+    S.shop[k] = S.shop[k] || { checked: {} };
+    S.shop[k].checked ||= {};
+    return S.shop[k];
+  }
+  // tutto quello che va comprato: ingredienti delle cene della settimana + lista sempre aperta
+  function shopAll(monday) {
+    const listed = Object.entries(S.list).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0))
+      .map(([id, x]) => ({ key: `l:${id}`, name: x.t, rep: catFind(x.t)?.r || x.r || 'altro', q: 0, u: '', listId: id, note: x.note }));
+    return [...shopItems(monday).filter(i => i.rep !== 'base'), ...listed];
+  }
+  const isChecked = (i, st) => i.listId ? !!S.list[i.listId]?.c : !!st.checked[i.key];
+
+  // ---- lista sempre aperta ----
+  const inList = t => Object.entries(S.list).find(([, x]) => x.t.toLowerCase() === String(t).toLowerCase().trim());
+  function addToList(t, r, note) {
+    t = String(t).trim().replace(/\s+/g, ' '); if (!t) return null;
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    const ex = inList(t); if (ex) return ex[0];
+    const c = catFind(t); const h = S.hist[histKey(t)];
+    let rep = r || c?.r || h?.r || guessReparto(t); if (rep === 'base') rep = 'condimenti';
+    const id = uid(); const x = { t: c?.t || t, r: rep, ts: Date.now() }; if (note) x.note = note;
+    S.list[id] = x; save(); Sync.list(() => ({ items: { [id]: x } }));
+    return id;
+  }
+  function removeFromList(id) {
+    delete S.list[id]; save(); Sync.list(del => ({ items: { [id]: del() } }));
+  }
+  function bump(t, r) {
+    const k = histKey(t); const h = S.hist[k] || { t, r, n: 0 };
+    S.hist[k] = { ...h, t, r, n: (h.n || 0) + 1, last: Date.now() };
+    return k;
+  }
+  // "Spesa fatta": quello che è nel carrello esce dalla lista e finisce tra i recenti
+  function finishShopping() {
+    const done = Object.entries(S.list).filter(([, x]) => x.c);
+    const histPatch = {};
+    done.forEach(([id, x]) => { delete S.list[id]; const k = bump(x.t, x.r); histPatch[k] = S.hist[k]; });
+    save();
+    Sync.list(del => ({ items: Object.fromEntries(done.map(([id]) => [id, del()])), hist: histPatch }));
+    return done.length;
+  }
+  function parsePastedList(text) {
+    return text.split(/\r?\n|,|;/).map(s => s.replace(/^[\s\-•*▫☐✓✔☑️]+/u, '').replace(/^\d+[.)]\s*/, '').replace(/\s+/g, ' ').trim())
+      .filter(s => s && s.length < 60 && !/^(lista|spesa|🛒)/i.test(s));
+  }
+
+  // =====================================================================
+  //  Rendering
+  // =====================================================================
+  let renderQueued = false;
+  function scheduleRender() {
+    if (renderQueued) return; renderQueued = true;
+    requestAnimationFrame(() => {
+      renderQueued = false;
+      // non interrompere chi sta scrivendo in un campo
+      const a = document.activeElement;
+      if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && $('#view').contains(a) && a.type !== 'checkbox') { setTimeout(scheduleRender, 800); return; }
+      render();
+    });
+  }
+  const chip = (p, small) => {
+    const i = P_INFO[p]; if (!i) return '';
+    return `<span class="inline-flex items-center gap-1 rounded-full font-bold ${small ? 'px-1.5 py-px text-[10px]' : 'px-2 py-0.5 text-xs'} ${i.cls}">${i.e} ${i.l}</span>`;
+  };
+  const card = (inner, extra = '') => `<section class="bg-card border border-line rounded-3xl shadow-soft ${extra}">${inner}</section>`;
+  const btnPrimary = 'px-4 py-2.5 rounded-full bg-accent hover:bg-accentdk text-white text-sm font-bold shadow-soft';
+  const btnSoft = 'px-3 py-2 rounded-full bg-sand hover:bg-sand2 text-ink text-sm font-semibold';
+  const inputCls = 'bg-cream border border-line rounded-2xl px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+
+  function render() {
+    document.querySelectorAll('.tabbtn').forEach(b => {
+      const on = b.dataset.tab === S.tab;
+      b.className = `tabbtn py-2 flex flex-col items-center gap-1 ${on ? 'text-accent' : 'text-muted'}`;
+      b.querySelector('i').className = b.querySelector('i').className.replace(/ ?(px-4 py-1 rounded-full bg-accentlt|text-lg)/g, '') + (on ? ' text-lg px-4 py-1 rounded-full bg-accentlt' : ' text-lg');
+    });
+    $('#weekLabel').textContent = `${fmtD(weekStart)} – ${fmtD(addDays(weekStart, 6))}`;
+    $('#weekNav').style.visibility = (S.tab === 'week' || S.tab === 'shop') ? 'visible' : 'hidden';
+    renderSyncBadge();
+    const v = $('#view');
+    if (S.tab === 'week') v.innerHTML = renderWeek();
+    else if (S.tab === 'shop') v.innerHTML = renderShop();
+    else if (S.tab === 'recipes') v.innerHTML = renderRecipes();
+    else v.innerHTML = renderSettings();
+  }
+
+  // ---------- Settimana ----------
+  function renderKidLunch(kid, d, extra) {
+    const K = KIDS[kid];
+    if (!d) return '';
+    if (d.missing) return `<div class="text-xs text-muted"><span class="font-bold">${K.e} ${K.n}</span> · menù non ancora pubblicato</div>`;
+    const tags = new Set(); d.dishes.forEach(x => tagsOf(x).tags.forEach(t => tags.add(t)));
+    return `<div class="text-xs leading-snug">
+      <div class="flex flex-wrap items-center gap-1 mb-0.5"><span class="font-bold text-ink">${K.e} ${K.n}</span>${[...tags].map(t => chip(t, true)).join('')}</div>
+      <div class="text-muted">${d.dishes.map(esc).join(' · ')}${extra || ''}</div>
+    </div>`;
+  }
+
+  function renderSlot(d, slot) {
+    const e = entry(d, slot);
+    const label = slot === 'cena' ? 'Cena' : 'Pranzo';
+    const icon = slot === 'cena' ? 'fa-moon' : 'fa-sun';
+    let body;
+    if (!e) {
+      body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left text-muted italic text-sm">da decidere…</button>`;
+    } else if (SPECIAL[e.id]) {
+      body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left text-sm font-semibold">${SPECIAL[e.id].e} ${SPECIAL[e.id].n}</button>`;
+    } else if (e.custom) {
+      body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left text-sm font-semibold">✏️ ${esc(e.custom)}</button>`;
+    } else {
+      const r = recipeById(e.id);
+      body = r ? `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left min-w-0">
+          <div class="text-sm font-bold text-ink leading-snug">${esc(r.n)}</div>
+          <div class="flex flex-wrap items-center gap-1 mt-1">${chip(r.p, true)}${r.link ? `<a href="${r.link}" target="_blank" rel="noopener" class="text-[10px] font-bold text-accent underline" data-stop>apri MetroPizza</a>` : ''}</div>
+        </button>` : `<span class="flex-1 text-sm text-muted">ricetta eliminata</span>`;
+    }
+    const locked = e?.locked;
+    return `<div class="flex items-center gap-2 ${slot === 'cena' ? 'bg-accentlt/50' : 'bg-butter/15'} rounded-2xl pl-2 pr-1.5 py-1.5">
+      <div class="w-8 h-8 rounded-full ${slot === 'cena' ? 'bg-accent' : 'bg-butter'} text-white grid place-items-center shrink-0" title="${label}"><i class="fa-solid ${icon} text-xs"></i></div>
+      ${body}
+      <div class="flex gap-1 shrink-0">
+        <button data-action="reroll" data-d="${d}" data-slot="${slot}" class="w-8 h-8 rounded-full bg-card hover:bg-sand text-muted" title="Un'altra proposta"><i class="fa-solid fa-shuffle text-xs"></i></button>
+        ${e ? `<button data-action="lock" data-d="${d}" data-slot="${slot}" class="w-8 h-8 rounded-full ${locked ? 'bg-sage text-white' : 'bg-card text-muted'}" title="${locked ? 'Bloccata' : 'Blocca'}"><i class="fa-solid ${locked ? 'fa-lock' : 'fa-lock-open'} text-xs"></i></button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function avoidHint(lunch) {
+    if (!lunch.kids.length) return '';
+    const parts = [...lunch.tags].filter(t => P_INFO[t]).map(t => P_INFO[t].l.toLowerCase());
+    if (lunch.pizza) parts.push('pizza');
+    if (lunch.primo) parts.push('primo');
+    if (!parts.length) return '';
+    return `<div class="text-[11px] font-semibold text-accentdk"><i class="fa-solid fa-utensils mr-1"></i>A pranzo già: ${parts.join(', ')}</div>`;
+  }
+
+  function renderWeek() {
+    const days = weekDays(weekStart);
+    const { c } = weekCounts(weekStart);
+    const today = todayIso();
+    const filled = days.reduce((n, d) => n + slotsOf(d).filter(s => entry(d, s)).length, 0);
+    const total = days.reduce((n, d) => n + slotsOf(d).length, 0);
+    const pw = piccoloWeek(weekStart); const gw = grandeWeekData(weekStart);
+
+    let h = card(`<div class="p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-serif text-lg font-bold leading-tight">La settimana</div>
+          <div class="text-xs text-muted">${filled} pasti su ${total} · nido sett. ${pw ?? '?'} · scuola ${gw ? esc(gw.label || 'ok') : '<span class="text-accent font-bold">menù non pubblicato</span>'}</div>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          ${filled ? `<button data-action="gen-all" class="w-10 h-10 rounded-full bg-sand hover:bg-sand2" title="Rifai tutto tranne i bloccati"><i class="fa-solid fa-rotate"></i></button>` : ''}
+          <button data-action="gen" class="${btnPrimary}"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>${filled ? 'Completa' : 'Proponi'}</button>
+        </div>
+      </div>
+      <div class="h-1.5 rounded-full bg-sand overflow-hidden"><div class="h-full bg-sage rounded-full" style="width:${total ? Math.round(filled / total * 100) : 0}%"></div></div>
+      <div class="flex flex-wrap gap-1.5">${Object.keys(TARGET).map(p => {
+        const n = c[p] || 0; const [min, max] = TARGET[p];
+        const st = n < min ? 'ring-2 ring-butter' : n > max ? 'ring-2 ring-accent' : '';
+        return `<span class="text-xs font-bold px-2 py-0.5 rounded-full ${P_INFO[p].cls} ${st}" title="${P_INFO[p].l}">${P_INFO[p].e} ${n}${min ? `/${min}` : ''}</span>`;
+      }).join('')}</div>
+    </div>`);
+
+    days.forEach((d, i) => {
+      const date = parseIso(d); const home = S.plan[d]?.home || {};
+      const lunch = lunchInfo(d);
+      const school = i < 5;
+      const pd = school ? piccoloDay(date) : null; const gd = school ? grandeDay(date) : null;
+      const isToday = d === today; const past = d < today;
+      h += card(`<div class="p-3 flex gap-3">
+        <div class="shrink-0 w-12 text-center">
+          <div class="rounded-2xl ${isToday ? 'bg-accent text-white' : i >= 5 ? 'bg-butter/30 text-ink' : 'bg-sand text-ink'} py-1.5">
+            <div class="text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-white/90' : 'text-muted'}">${GG[i]}</div>
+            <div class="font-serif text-xl font-bold leading-none">${date.getDate()}</div>
+          </div>
+          ${isToday ? '<div class="text-[10px] font-bold text-accent mt-1">oggi</div>' : ''}
+          ${school ? `<button data-action="day-menu" data-d="${d}" class="mt-1 w-8 h-8 rounded-full hover:bg-sand text-muted" title="Chi è a casa?"><i class="fa-solid fa-house-user text-xs"></i></button>` : ''}
+        </div>
+        <div class="flex-1 min-w-0 space-y-2">
+          ${school ? `<div class="space-y-1.5">
+            ${home.grande ? `<div class="text-xs text-muted">${KIDS.grande.e} ${KIDS.grande.n} a casa</div>` : renderKidLunch('grande', gd)}
+            ${home.piccolo ? `<div class="text-xs text-muted">${KIDS.piccolo.e} ${KIDS.piccolo.n} a casa</div>` : renderKidLunch('piccolo', pd, pd?.merenda ? `<span class="block text-[10px] text-muted/80">merenda: ${esc(pd.merenda)}</span>` : '')}
+          </div>${avoidHint(lunch)}` : `<div class="text-xs font-bold text-muted pt-1">Weekend · tutti a casa</div>`}
+          <div class="space-y-1.5">${slotsOf(d).map(s => renderSlot(d, s)).join('')}</div>
+        </div>
+      </div>`, past ? 'opacity-60' : (isToday ? 'ring-2 ring-accent/40' : ''));
+    });
+    return h;
+  }
+
+  // ---------- Spesa ----------
+  function renderShop() {
+    const st = shopState(weekStart);
+    const all = shopAll(weekStart);
+    const base = shopItems(weekStart).filter(i => i.rep === 'base');
+    const repName = Object.fromEntries(MC_REPARTI.map(r => [r[0], r]));
+    const todo = all.filter(i => !isChecked(i, st)).length;
+    const inCart = Object.values(S.list).filter(x => x.c).length;
+    const ds = shopDays(weekStart);
+    const pct = all.length ? Math.round((all.length - todo) / all.length * 100) : 0;
+
+    let h = card(`<div class="p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0"><div class="font-serif text-lg font-bold leading-tight">Spesa all'Esselunga</div>
+          <div class="text-xs text-muted">${todo} da prendere · ${all.length - todo} nel carrello · per ${S.people}</div>
+          <div class="text-[11px] text-muted">${ds.length ? `cene da ${GG[dowOf(parseIso(ds[0]))].toLowerCase()} ${fmtD(parseIso(ds[0]))} a domenica` : 'cene della settimana già passate'}</div></div>
+        <button data-action="share" class="w-10 h-10 rounded-full bg-sand hover:bg-sand2 shrink-0" title="Invia su WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
+      </div>
+      <div class="h-1.5 rounded-full bg-sand overflow-hidden"><div class="h-full bg-sage rounded-full" style="width:${pct}%"></div></div>
+      <div class="flex gap-2">
+        <button data-action="catalog" class="flex-1 ${btnPrimary}"><i class="fa-solid fa-plus mr-1"></i>Aggiungi prodotti</button>
+        ${inCart ? `<button data-action="finish-shop" class="px-4 py-2.5 rounded-full bg-sage hover:bg-sagedk text-white text-sm font-bold shadow-soft"><i class="fa-solid fa-check mr-1"></i>Spesa fatta</button>` : ''}
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <label class="flex items-center gap-1.5"><input type="checkbox" class="accent-[#D4643B]" data-action="toggle-show" ${S.showChecked ? 'checked' : ''}> mostra già presi</label>
+        <label class="flex items-center gap-1.5"><input type="checkbox" class="accent-[#D4643B]" data-action="toggle-past" ${S.shopPast ? 'checked' : ''}> anche cene passate</label>
+        <button data-action="uncheck-all" class="underline ml-auto">togli spunte</button>
+      </div>
+    </div>`);
+
+    if (!all.length) h += `<p class="text-center text-muted text-sm py-8"><i class="fa-solid fa-basket-shopping text-3xl text-sand2 block mb-2"></i>La lista è vuota.<br>Premi <b>Aggiungi prodotti</b>, oppure pianifica le cene in <b>Settimana</b>.</p>`;
+
+    S.reparti.forEach(k => {
+      const list = all.filter(i => i.rep === k && (S.showChecked || !isChecked(i, st)))
+        .sort((a, b) => (isChecked(a, st) ? 1 : 0) - (isChecked(b, st) ? 1 : 0) || a.name.localeCompare(b.name));
+      if (!list.length) return;
+      const r = repName[k] || [k, k, '🛒'];
+      h += card(`<div class="px-4 pt-3 pb-1 flex items-center gap-2"><span class="text-lg">${r[2]}</span><span class="font-serif font-bold">${r[1]}</span><span class="ml-auto text-xs text-muted">${list.filter(i => !isChecked(i, st)).length}</span></div>
+        <ul class="divide-y divide-line/70">${list.map(i => `
+          <li class="flex items-center gap-2 pl-4 pr-2 py-2.5 ${isChecked(i, st) ? 'opacity-50' : ''}">
+            <label class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+              <input type="checkbox" class="chk w-5 h-5 accent-[#6F8F60] shrink-0" data-action="check" data-key="${esc(i.key)}" ${isChecked(i, st) ? 'checked' : ''}>
+              <span class="flex-1 min-w-0"><span class="text-sm font-semibold ${isChecked(i, st) ? 'line-through' : ''}"><span class="mr-1">${emojiOf(i.name, i.rep)}</span>${esc(i.name)}</span>
+                ${i.q ? `<span class="text-xs font-bold text-accentdk ml-1">${fmtQty(i.q, i.u)}</span>` : ''}
+                ${i.note ? `<span class="text-xs font-bold text-accentdk ml-1">${esc(i.note)}</span>` : ''}
+                ${i.uses ? `<span class="block text-[10px] text-muted truncate">${i.uses.join(', ')}</span>` : ''}</span>
+            </label>
+            ${i.listId ? `<button data-action="note" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Nota (quantità, marca…)"><i class="fa-solid fa-pen text-xs"></i></button>
+              <button data-action="del-item" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Togli dalla lista"><i class="fa-solid fa-xmark"></i></button>` : ''}
+          </li>`).join('')}</ul>`, 'overflow-hidden');
+    });
+
+    if (base.length) h += `<details class="bg-cream border border-line rounded-3xl px-4 py-3">
+      <summary class="text-sm font-semibold text-muted"><i class="fa-solid fa-jar mr-1"></i> Da controllare in dispensa (${base.length})</summary>
+      <p class="text-xs text-muted mt-2">${base.map(b => esc(b.name)).join(' · ')}</p>
+      <p class="text-[11px] text-muted/80 mt-1">Se manca qualcosa, aggiungilo con <b>Aggiungi prodotti</b>.</p>
+    </details>`;
+    return h;
+  }
+
+  function shopText() {
+    const st = shopState(weekStart); const all = shopAll(weekStart);
+    const repName = Object.fromEntries(MC_REPARTI.map(r => [r[0], r]));
+    let t = `🛒 Spesa\n`;
+    S.reparti.forEach(k => {
+      const list = all.filter(i => i.rep === k && !isChecked(i, st));
+      if (!list.length) return;
+      t += `\n${repName[k]?.[2] || ''} *${repName[k]?.[1] || k}*\n` + list.map(i => `▫️ ${i.name}${i.q ? ` (${fmtQty(i.q, i.u)})` : ''}${i.note ? ` – ${i.note}` : ''}`).join('\n') + '\n';
+    });
+    return t;
+  }
+
+  // ---------- Catalogo (finestra "Aggiungi prodotti") ----------
+  let catQuery = ''; let catIsOpen = false; const catOpen = new Set();
+  function catTile(t, e, r, sub) {
+    const on = !!inList(t);
+    return `<button type="button" data-action="cat-toggle" data-t="${esc(t)}" data-r="${esc(r)}" class="rounded-2xl px-1 pt-2 pb-1.5 text-center border transition ${on ? 'bg-accent border-accent text-white shadow-soft' : 'bg-cream border-line hover:bg-sand'}">
+      <div class="text-2xl leading-none">${e}</div>
+      <div class="text-[11px] font-bold leading-tight mt-1 break-words">${esc(t)}</div>
+      ${sub ? `<div class="text-[9px] ${on ? 'text-white/80' : 'text-muted'}">${esc(sub)}</div>` : ''}
+    </button>`;
+  }
+  const grid = inner => `<div class="grid grid-cols-4 gap-1.5">${inner}</div>`;
+  const repOf = k => MC_REPARTI.find(x => x[0] === k) || [k, k, '🛒'];
+  function knownProducts() {
+    const m = new Map(CAT.map(c => [c.t.toLowerCase(), c]));
+    Object.values(S.hist).forEach(h => { if (!m.has(h.t.toLowerCase())) m.set(h.t.toLowerCase(), { t: h.t, e: emojiOf(h.t, h.r), r: h.r === 'dispensa' ? guessReparto(h.t).replace('base', 'condimenti') : h.r }); });
+    return [...m.values()];
+  }
+  function catalogBody() {
+    const q = catQuery.trim().toLowerCase();
+    const n = Object.keys(S.list).length;
+    let h = `<div class="sticky -top-1 z-10 bg-card -mx-4 px-4 pt-1 pb-3 border-b border-line mb-3">
+      <div class="flex items-center justify-between mb-2"><div class="font-serif text-lg font-bold">Aggiungi prodotti</div>
+        <button type="button" data-action="close-modal" class="px-4 h-9 rounded-full bg-ink text-paper text-sm font-bold">Fatto · ${n} in lista</button></div>
+      <form data-form="cat-add" class="flex gap-2">
+        <input data-input="csearch" name="t" value="${esc(catQuery)}" autocomplete="off" placeholder="Cerca o scrivi un prodotto…" class="flex-1 min-w-0 ${inputCls}">
+        <button class="w-10 h-10 rounded-full bg-sage text-white shrink-0" title="Aggiungi"><i class="fa-solid fa-plus"></i></button>
+      </form></div>`;
+    if (q) {
+      const res = knownProducts().filter(c => c.t.toLowerCase().includes(q))
+        .sort((a, b) => a.t.toLowerCase().indexOf(q) - b.t.toLowerCase().indexOf(q) || a.t.localeCompare(b.t)).slice(0, 40);
+      if (!res.some(c => c.t.toLowerCase() === q)) {
+        const t = catQuery.trim(); let r0 = guessReparto(t); if (r0 === 'base') r0 = 'condimenti';
+        h += `<div class="text-xs font-bold uppercase tracking-wide text-muted mb-1.5">Nuovo prodotto</div>`
+          + grid(catTile(t.charAt(0).toUpperCase() + t.slice(1), '➕', r0, repOf(r0)[1])) + '<div class="h-3"></div>';
+      }
+      if (res.length) h += grid(res.map(c => catTile(c.t, c.e, c.r)).join(''));
+      return h;
+    }
+    const hist = Object.values(S.hist);
+    const soliti = [...hist].sort((a, b) => (b.n || 0) - (a.n || 0) || (a.o ?? 99) - (b.o ?? 99)).slice(0, 12);
+    if (soliti.length) h += `<div class="text-xs font-bold uppercase tracking-wide text-sagedk mb-1.5">⭐ I soliti</div>` + grid(soliti.map(x => catTile(x.t, emojiOf(x.t, x.r), catFind(x.t)?.r || x.r)).join('')) + '<div class="h-4"></div>';
+    const recenti = hist.filter(x => x.last).sort((a, b) => b.last - a.last).slice(0, 8);
+    if (recenti.length) h += `<div class="text-xs font-bold uppercase tracking-wide text-muted mb-1.5">🕘 Comprati di recente</div>` + grid(recenti.map(x => catTile(x.t, emojiOf(x.t, x.r), catFind(x.t)?.r || x.r)).join('')) + '<div class="h-4"></div>';
+    const known = knownProducts();
+    S.reparti.forEach(k => {
+      const items = known.filter(c => c.r === k); if (!items.length) return;
+      const r = repOf(k); const sel = items.filter(c => inList(c.t)).length;
+      h += `<details class="mb-2 bg-cream/60 rounded-2xl px-2 py-2" ${catOpen.has(k) ? 'open' : ''} data-rep="${k}"><summary class="flex items-center gap-2 px-1 font-serif font-bold text-sm cursor-pointer">${r[2]} ${r[1]}<span class="ml-auto text-xs font-sans ${sel ? 'text-accent font-bold' : 'text-muted'}">${sel ? sel + ' in lista' : items.length}</span></summary>
+        <div class="mt-2">${grid(items.sort((a, b) => a.t.localeCompare(b.t)).map(c => catTile(c.t, c.e, c.r)).join(''))}</div></details>`;
+    });
+    h += `<details class="mt-4"><summary class="text-xs font-bold text-muted underline cursor-pointer">Incolla una lista (da Bring!, WhatsApp, note…)</summary>
+      <form data-form="paste-list" class="mt-2 space-y-2"><textarea name="t" rows="5" placeholder="Un prodotto per riga, oppure separati da virgole" class="w-full ${inputCls}"></textarea>
+      <button class="w-full ${btnSoft}">Aggiungi tutti</button></form></details>`;
+    return h;
+  }
+  function openCatalog() { catQuery = ''; openModal(catalogBody()); catIsOpen = true; }
+  function refreshCatalog(keepFocus) {
+    if (!catIsOpen || $('#modal').classList.contains('hidden')) { catIsOpen = false; return; }
+    const a = document.activeElement;
+    if (!keepFocus && a && a.tagName === 'TEXTAREA' && $('#modal').contains(a)) return; // sta incollando
+    const sc = $('#modal .sheet'); const top = sc.scrollTop;
+    $('#modalBody').innerHTML = `<div class="w-10 h-1 rounded-full bg-sand2 mx-auto -mt-1 mb-3"></div>` + catalogBody();
+    sc.scrollTop = top;
+    if (keepFocus) { const i = $('[data-input="csearch"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  }
+
+  // ---------- Ricette ----------
+  let recipeFilter = { q: '', p: '' };
+  function renderRecipes() {
+    const list = allRecipes().filter(r =>
+      (!recipeFilter.p || r.p === recipeFilter.p) &&
+      (!recipeFilter.q || r.n.toLowerCase().includes(recipeFilter.q.toLowerCase())))
+      .sort((a, b) => a.n.localeCompare(b.n));
+    const pill = (on) => `text-xs font-bold px-3 py-1 rounded-full ${on ? 'bg-ink text-paper' : 'bg-card border border-line text-muted'}`;
+    return `<div class="space-y-3">
+      <div class="flex gap-2">
+        <input data-input="rsearch" value="${esc(recipeFilter.q)}" placeholder="Cerca ricetta…" class="flex-1 min-w-0 ${inputCls} bg-card">
+        <button data-action="new-recipe" class="${btnPrimary}"><i class="fa-solid fa-plus mr-1"></i>Nuova</button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <button data-action="rfilter" data-p="" class="${pill(!recipeFilter.p)}">Tutte · ${allRecipes().length}</button>
+        ${Object.keys(P_INFO).map(p => `<button data-action="rfilter" data-p="${p}" class="${pill(recipeFilter.p === p)}">${P_INFO[p].e} ${P_INFO[p].l}</button>`).join('')}
+      </div>
+    </div>
+    <ul class="grid grid-cols-1 gap-2">${list.map(r => {
+      const f = S.flags[r.id];
+      return `<li class="bg-card border border-line rounded-2xl shadow-soft pl-3 pr-1.5 py-2 flex items-center gap-2 ${f === 'ban' ? 'opacity-50' : ''}">
+        <span class="text-xl shrink-0">${P_INFO[r.p]?.e || '🍽️'}</span>
+        <button data-action="recipe" data-id="${r.id}" class="flex-1 text-left min-w-0">
+          <div class="text-sm font-bold truncate">${esc(r.n)}</div>
+          <div class="text-[11px] text-muted">${C_INFO[r.c] || ''}${r.s === 'p' ? ' · da pranzo' : ''}${r.custom ? ' · personale' : ''}</div>
+        </button>
+        <button data-action="flag" data-id="${r.id}" data-f="fav" class="w-9 h-9 rounded-full ${f === 'fav' ? 'text-accent bg-accentlt' : 'text-sand2'}" title="Preferita"><i class="fa-solid fa-heart"></i></button>
+        <button data-action="flag" data-id="${r.id}" data-f="ban" class="w-9 h-9 rounded-full ${f === 'ban' ? 'text-ink bg-sand' : 'text-sand2'}" title="Mai più"><i class="fa-solid fa-ban"></i></button>
+      </li>`; }).join('')}</ul>`;
+  }
+
+  // ---------- Impostazioni ----------
+  function renderSettings() {
+    const pw = piccoloWeek(mondayOf(new Date()));
+    const gKeys = Object.keys({ ...(GRANDE.weeks || {}), ...S.pastedGrande }).sort();
+    const repName = Object.fromEntries(MC_REPARTI.map(r => [r[0], r]));
+    const box = (title, icon, body) => card(`<div class="p-4 space-y-3"><h2 class="font-serif text-lg font-bold flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-accentlt text-accent grid place-items-center text-sm"><i class="fa-solid ${icon}"></i></span>${title}</h2>${body}</div>`);
+    const sel = 'bg-cream border border-line rounded-xl px-2 py-1.5 text-sm';
+
+    let fam;
+    if (!Sync.available) fam = `<p class="text-sm text-muted">La sincronizzazione non è ancora configurata (manca il progetto Firebase). Per ora i dati restano su questo telefono.</p>`;
+    else if (!S.family) fam = `
+      <p class="text-sm text-muted">Collega i telefoni di casa: vedrete la stessa settimana e la stessa lista, e le spunte al supermercato compaiono subito sull'altro telefono.</p>
+      <button data-action="family-create" class="${btnPrimary} w-full"><i class="fa-solid fa-people-roof mr-1"></i>Crea la famiglia su questo telefono</button>
+      <form data-form="join" class="flex gap-2"><input name="c" placeholder="oppure inserisci il codice (XXXX-XXXX-XXXX)" class="flex-1 min-w-0 uppercase ${inputCls}" autocomplete="off"><button class="${btnSoft}">Entra</button></form>`;
+    else fam = `
+      <div class="flex items-center justify-between bg-cream border border-line rounded-2xl px-3 py-2">
+        <div><div class="text-[11px] text-muted">Codice famiglia</div><div class="font-mono font-bold tracking-wider">${esc(S.family)}</div></div>
+        <button data-action="family-share" class="${btnPrimary}"><i class="fa-brands fa-whatsapp mr-1"></i>Invia</button>
+      </div>
+      <p class="text-xs text-muted">Manda il link all'altro telefono una volta sola: aprendolo, l'app si collega da sola. Tieni il codice per voi: chi lo conosce vede il vostro menù.</p>
+      <button data-action="family-leave" class="text-xs text-muted underline">Scollega questo telefono</button>`;
+
+    return [
+      box('Famiglia e telefoni', 'fa-mobile-screen-button', fam),
+      box(`${KIDS.piccolo.e} Il piccolo · nido`, 'fa-baby', `
+        <label class="flex items-center justify-between gap-3 text-sm">Questa settimana è la
+          <select data-input="piccolo-week" class="${sel}">${[1, 2, 3, 4].map(n => `<option ${n === pw ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="flex items-center justify-between gap-3 text-sm">Menù
+          <select data-input="piccolo-season" class="${sel}">
+            <option value="auto" ${S.piccolo.season === 'auto' ? 'selected' : ''}>Automatico (ott–apr inverno)</option>
+            <option value="ai" ${S.piccolo.season === 'ai' ? 'selected' : ''}>Autunno/Inverno</option>
+            <option value="pe" ${S.piccolo.season === 'pe' ? 'selected' : ''}>Primavera/Estate</option></select></label>
+        <p class="text-xs text-muted">Le 4 settimane girano da sole. Se dopo le vacanze il nido riparte da un'altra settimana, correggila qui. Quando arriva un nuovo PDF, va aggiornato <code>data/piccolo.json</code>.</p>`),
+      box(`${KIDS.grande.e} Il grande · scuola`, 'fa-school', `
+        <p class="text-sm">Settimane disponibili: <b>${gKeys.length ? gKeys.map(k => fmtD(parseIso(k))).join(', ') : 'nessuna'}</b></p>
+        <p class="text-xs text-muted">Si aggiorna da solo ogni mattina dal sito della scuola${GRANDE.updated ? ` (ultima novità: ${esc(GRANDE.updated.replace('T', ' '))})` : ''}.</p>
+        <div class="flex flex-wrap gap-2"><a href="https://www.angeli-custodi.com/cosa-si-mangia" target="_blank" rel="noopener" class="${btnSoft}"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>Apri sito</a>
+        <button data-action="grande-paste" class="${btnSoft}"><i class="fa-solid fa-paste mr-1"></i>Incolla a mano</button></div>`),
+      box('A tavola', 'fa-utensils', `
+        <label class="flex items-center justify-between gap-3 text-sm">Persone (per le quantità)
+          <input type="number" min="1" max="12" step="1" value="${S.people}" data-input="people" class="w-20 ${sel} text-right"></label>
+        <p class="text-xs text-muted">Pesce proposto solo tra: ${FISH_OK.join(', ')}.</p>`),
+      box('Giro reparti Esselunga', 'fa-route', `
+        <p class="text-xs text-muted">Metti i reparti nell'ordine in cui li incontri al negozio: la lista segue questo giro.</p>
+        <ul class="space-y-1">${S.reparti.map((k, i) => `<li class="flex items-center gap-2 bg-cream rounded-2xl pl-3 pr-1 py-1 text-sm">
+          <span class="w-5 text-xs font-bold text-muted">${i + 1}</span><span class="flex-1">${repName[k]?.[2] || ''} ${repName[k]?.[1] || k}</span>
+          <button data-action="rep-up" data-i="${i}" class="w-8 h-8 rounded-full hover:bg-sand ${i === 0 ? 'opacity-30' : ''}"><i class="fa-solid fa-arrow-up text-xs"></i></button>
+          <button data-action="rep-down" data-i="${i}" class="w-8 h-8 rounded-full hover:bg-sand ${i === S.reparti.length - 1 ? 'opacity-30' : ''}"><i class="fa-solid fa-arrow-down text-xs"></i></button></li>`).join('')}</ul>`),
+      box('Backup', 'fa-floppy-disk', `
+        <p class="text-xs text-muted">Esporta un backup ogni tanto: è un file con piani, liste, ricette e impostazioni.</p>
+        <div class="flex flex-wrap gap-2">
+          <button data-action="export" class="${btnSoft}"><i class="fa-solid fa-download mr-1"></i>Esporta</button>
+          <label class="${btnSoft} cursor-pointer"><i class="fa-solid fa-upload mr-1"></i>Importa<input type="file" accept="application/json" data-input="import" class="hidden"></label>
+          <button data-action="reset" class="px-3 py-2 rounded-full bg-rose-100 text-rose-800 text-sm font-semibold"><i class="fa-solid fa-trash mr-1"></i>Azzera</button>
+        </div>`),
+      `<p class="text-center text-xs text-muted pb-4 font-serif italic">MenuCasa v2 · fatto in casa</p>`
+    ].join('');
+  }
+
+  // =====================================================================
+  //  Finestre (bottom sheet)
+  // =====================================================================
+  function openModal(html) { catIsOpen = false; $('#modalBody').innerHTML = `<div class="w-10 h-1 rounded-full bg-sand2 mx-auto -mt-1 mb-3"></div>` + html; $('#modal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closeModal() { $('#modal').classList.add('hidden'); document.body.style.overflow = ''; }
+  const closeBtn = `<button type="button" data-action="close-modal" class="w-9 h-9 rounded-full bg-sand shrink-0"><i class="fa-solid fa-xmark"></i></button>`;
+
+  function openChooser(d, slot) {
+    const date = parseIso(d);
+    const list = ranked(d, slot);
+    const lunch = slot === 'cena' ? contextFor(d, slot).lunch : null;
+    const good = list.filter(x => x.s > -50);
+    const rest = list.filter(x => x.s <= -50 && x.s > -1e8);
+    const row = x => `<li><button data-action="set" data-d="${d}" data-slot="${slot}" data-id="${x.r.id}" class="w-full text-left bg-cream hover:bg-sand border border-line rounded-2xl px-3 py-2">
+        <div class="flex items-center justify-between gap-2"><span class="text-sm font-bold">${esc(x.r.n)}</span>${chip(x.r.p, true)}</div>
+        ${(x.why.length || x.bad.length) ? `<div class="text-[11px] mt-0.5 font-semibold">${x.why.map(w => `<span class="text-sagedk">✓ ${esc(w)}</span>`).join(' ')} ${x.bad.map(w => `<span class="text-accentdk">⚠ ${esc(w)}</span>`).join(' ')}</div>` : ''}
+      </button></li>`;
+    openModal(`
+      <div class="flex items-center justify-between mb-3">
+        <div><div class="font-serif text-lg font-bold">${slot === 'cena' ? 'Cena' : 'Pranzo'} di ${GIORNI[dowOf(date)].toLowerCase()} ${fmtD(date)}</div>
+        ${lunch && lunch.kids.length ? `<div class="text-xs text-muted">A pranzo: ${[...lunch.tags].map(t => P_INFO[t]?.e || '').join(' ')} ${lunch.primo ? '🍝' : ''}</div>` : ''}</div>
+        ${closeBtn}
+      </div>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        ${Object.entries(SPECIAL).map(([k, v]) => `<button data-action="set" data-d="${d}" data-slot="${slot}" data-id="${k}" class="bg-butter/20 hover:bg-butter/30 rounded-2xl px-3 py-2 text-sm font-semibold text-left">${v.e} ${v.n}</button>`).join('')}
+      </div>
+      <form data-form="custom" data-d="${d}" data-slot="${slot}" class="flex gap-2 mb-4">
+        <input name="t" placeholder="Oppure scrivi tu (es. toast e minestra)" class="flex-1 min-w-0 ${inputCls}">
+        <button class="w-10 h-10 rounded-full bg-sage text-white shrink-0"><i class="fa-solid fa-check"></i></button>
+      </form>
+      <div class="text-xs font-bold uppercase tracking-wide text-sagedk mb-1.5">Consigliate</div>
+      <ul class="space-y-1.5 mb-4">${good.map(row).join('') || '<li class="text-sm text-muted">Nessuna proposta perfetta: guarda sotto.</li>'}</ul>
+      ${rest.length ? `<details><summary class="text-xs font-bold uppercase tracking-wide text-muted mb-1.5">Altre, meno adatte · ${rest.length}</summary><ul class="space-y-1.5 mt-2">${rest.map(row).join('')}</ul></details>` : ''}
+      ${entry(d, slot) ? `<button data-action="clear" data-d="${d}" data-slot="${slot}" class="mt-4 w-full py-2 rounded-full border border-line text-muted text-sm font-semibold">Svuota questo pasto</button>` : ''}
+    `);
+  }
+
+  function openDayMenu(d) {
+    const date = parseIso(d); const home = S.plan[d]?.home || {};
+    const row = k => `<label class="flex items-center justify-between bg-cream rounded-2xl px-3 py-3 mb-2"><span class="font-semibold">${KIDS[k].e} ${KIDS[k].n} è a casa</span><input type="checkbox" class="w-5 h-5 accent-[#D4643B]" data-action="home" data-d="${d}" data-k="${k}" ${home[k] ? 'checked' : ''}></label>`;
+    openModal(`
+      <div class="flex items-center justify-between mb-3"><div class="font-serif text-lg font-bold">${GIORNI[dowOf(date)]} ${fmtD(date)}</div>${closeBtn}</div>
+      <p class="text-xs text-muted mb-3">Malattia, vacanze, sciopero: il suo pranzo a scuola non conta e compare il pranzo a casa da pianificare.</p>
+      ${row('grande')}${row('piccolo')}`);
+  }
+
+  function openRecipe(id) {
+    const r = recipeById(id); if (!r) return;
+    const k = S.people / 4;
+    openModal(`
+      <div class="flex items-start justify-between gap-2 mb-2"><div><div class="font-serif text-lg font-bold leading-tight">${esc(r.n)}</div>
+        <div class="flex items-center gap-1 mt-1">${chip(r.p)}<span class="text-xs text-muted">${C_INFO[r.c] || ''}</span></div></div>${closeBtn}</div>
+      ${r.link ? `<a href="${r.link}" target="_blank" rel="noopener" class="inline-block mb-2 text-sm font-bold text-accent underline">Calcola l'impasto con MetroPizza →</a>` : ''}
+      <div class="text-xs font-bold uppercase text-muted mt-3 mb-1">Ingredienti per ${S.people}</div>
+      <ul class="text-sm">${r.ing.map(([n, q, u]) => `<li class="flex justify-between border-b border-line py-1.5"><span>${esc(n)}</span><span class="text-muted">${q ? fmtQty(q * k, u) : 'q.b.'}</span></li>`).join('')}</ul>
+      <div class="flex gap-2 mt-4">
+        <button data-action="edit-recipe" data-id="${r.id}" class="flex-1 ${btnSoft}"><i class="fa-solid fa-pen mr-1"></i>Modifica</button>
+        ${r.custom ? `<button data-action="del-recipe" data-id="${r.id}" class="px-4 rounded-full bg-rose-100 text-rose-800 text-sm" title="${MC_RECIPES.some(x => x.id === r.id) ? 'Ripristina originale' : 'Elimina'}"><i class="fa-solid ${MC_RECIPES.some(x => x.id === r.id) ? 'fa-rotate-left' : 'fa-trash'}"></i></button>` : ''}
+      </div>`);
+  }
+
+  function openRecipeEditor(id) {
+    const r = id ? recipeById(id) : { n: '', p: 'carne', c: 'pane', ing: [] };
+    const ingText = r.ing.map(([n, q, u]) => (q ? `${q} ${u} ` : '') + n).join('\n');
+    const opt = (o, v) => Object.entries(o).map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${typeof l === 'string' ? l : l.e + ' ' + l.l}</option>`).join('');
+    openModal(`
+      <form data-form="recipe" data-id="${id || ''}" class="space-y-3">
+        <div class="flex items-center justify-between"><div class="font-serif text-lg font-bold">${id ? 'Modifica ricetta' : 'Nuova ricetta'}</div>${closeBtn}</div>
+        <input name="n" required value="${esc(r.n)}" placeholder="Nome (es. Pollo al curry con riso)" class="w-full ${inputCls}">
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-xs font-bold text-muted">Proteina<select name="p" class="mt-1 w-full ${inputCls} text-ink">${opt(P_INFO, r.p)}</select></label>
+          <label class="text-xs font-bold text-muted">Base<select name="c" class="mt-1 w-full ${inputCls} text-ink">${opt(C_INFO, r.c)}</select></label>
+        </div>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="s" ${r.s === 'p' ? 'checked' : ''} class="accent-[#D4643B]"> Piatto da pranzo (primo, meglio nel weekend)</label>
+        <label class="block text-xs font-bold text-muted">Ingredienti per 4 persone, uno per riga<br><span class="font-normal">es. "500 g petto di pollo", "2 pz zucchine", "1 conf piadine", "olio" (senza quantità = da dispensa)</span>
+          <textarea name="ing" rows="8" class="mt-1 w-full ${inputCls} text-ink font-mono">${esc(ingText)}</textarea></label>
+        <button class="w-full ${btnPrimary}">Salva</button>
+      </form>`);
+  }
+
+  function parseIngredients(text) {
+    return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const m = l.match(/^(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|pz|conf)?\s+(.+)$/i);
+      if (!m) return [l, 0, '', guessReparto(l)];
+      let q = parseFloat(m[1].replace(',', '.')); let u = (m[2] || 'pz').toLowerCase();
+      if (u === 'kg') { q *= 1000; u = 'g'; } if (u === 'l') { q *= 1000; u = 'ml'; }
+      const name = m[3].charAt(0).toUpperCase() + m[3].slice(1);
+      return [name, q, u, guessReparto(name)];
+    });
+  }
+
+  // =====================================================================
+  //  Famiglia
+  // =====================================================================
+  async function joinFamily(code, fromLink) {
+    code = normCode(code);
+    if (code.replace(/-/g, '').length !== 12) { toast('Codice non valido'); return; }
+    if (!Sync.available) { toast('Sincronizzazione non ancora configurata'); return; }
+    if (S.family === code) return;
+    if (!fromLink || confirm(`Collego questo telefono alla famiglia ${code}?\nVedrai la settimana e la lista condivise.`)) {
+      Sync.stop(); S.family = code; save(); render(); await Sync.start(); toast('Telefono collegato');
+    }
+  }
+  async function shareText(text, fallbackMsg) {
+    if (navigator.share) { try { await navigator.share({ text }); return; } catch { return; } }
+    try { await navigator.clipboard.writeText(text); toast(fallbackMsg); }
+    catch { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
+  }
+
+  // =====================================================================
+  //  Eventi
+  // =====================================================================
+  document.addEventListener('click', async (ev) => {
+    if (ev.target.closest('[data-stop]')) return;
+    const tab = ev.target.closest('[data-tab]');
+    if (tab) { S.tab = tab.dataset.tab; save(); render(); window.scrollTo(0, 0); return; }
+    const el = ev.target.closest('[data-action]'); if (!el) return;
+    const a = el.dataset.action; const d = el.dataset.d; const slot = el.dataset.slot;
+    const week = iso(weekStart);
+    switch (a) {
+      case 'week-prev': weekStart = addDays(weekStart, -7); render(); break;
+      case 'week-next': weekStart = addDays(weekStart, 7); render(); break;
+      case 'week-today': weekStart = mondayOf(new Date()); render(); break;
+      case 'gen': { const n = generateWeek(weekStart, false); toast(n ? `Proposti ${n} pasti` : 'Settimana già completa'); render(); break; }
+      case 'gen-all': if (confirm('Rifaccio tutte le proposte della settimana (tranne quelle bloccate)?')) { generateWeek(weekStart, true); toast('Settimana rifatta'); render(); } break;
+      case 'choose': openChooser(d, slot); break;
+      case 'reroll': {
+        const cur = entry(d, slot)?.id;
+        const list = ranked(d, slot).filter(x => x.r.id !== cur && x.s > -150).slice(0, 5);
+        if (!list.length) { toast('Nessuna alternativa adatta'); break; }
+        const r = list[Math.floor(Math.random() * Math.min(3, list.length))].r;
+        setEntry(d, slot, { id: r.id, locked: false }); save(); Sync.days([d]); render(); break;
+      }
+      case 'lock': { const e = entry(d, slot); if (e) { e.locked = !e.locked; save(); Sync.days([d]); render(); } break; }
+      case 'set': setEntry(d, slot, { id: el.dataset.id, locked: true }); save(); Sync.days([d]); closeModal(); render(); break;
+      case 'clear': setEntry(d, slot, null); save(); Sync.days([d]); closeModal(); render(); break;
+      case 'day-menu': openDayMenu(d); break;
+      case 'home': {
+        S.plan[d] = S.plan[d] || {}; S.plan[d].home = S.plan[d].home || {};
+        S.plan[d].home[el.dataset.k] = el.checked;
+        if (!S.plan[d].home.grande && !S.plan[d].home.piccolo) { delete S.plan[d].home; delete S.plan[d].pranzo; }
+        save(); Sync.days([d]); render(); break;
+      }
+      case 'close-modal': closeModal(); break;
+      case 'check': {
+        const k = el.dataset.key;
+        if (k.startsWith('l:')) {
+          const id = k.slice(2); const x = S.list[id]; if (!x) break;
+          if (el.checked) x.c = true; else delete x.c;
+          save(); Sync.list(del => ({ items: { [id]: { c: el.checked ? true : del() } } })); render(); break;
+        }
+        const st = shopState(weekStart);
+        if (el.checked) st.checked[k] = true; else delete st.checked[k];
+        save(); Sync.shopCheck(week, k, el.checked); render(); break;
+      }
+      case 'toggle-show': S.showChecked = el.checked; save(); render(); break;
+      case 'toggle-past': S.shopPast = el.checked; save(); render(); break;
+      case 'uncheck-all': {
+        shopState(weekStart).checked = {}; Sync.shopReplaceChecked(week);
+        const ids = Object.keys(S.list).filter(id => S.list[id].c); ids.forEach(id => delete S.list[id].c);
+        if (ids.length) Sync.list(del => ({ items: Object.fromEntries(ids.map(id => [id, { c: del() }])) }));
+        save(); render(); break;
+      }
+      case 'del-item': removeFromList(el.dataset.id); render(); break;
+      case 'note': {
+        const x = S.list[el.dataset.id]; if (!x) break;
+        const n = prompt(`Nota per "${x.t}" (quantità, marca…)`, x.note || ''); if (n === null) break;
+        const v = n.trim(); if (v) x.note = v; else delete x.note;
+        save(); Sync.list(del => ({ items: { [el.dataset.id]: { note: v || del() } } })); render(); break;
+      }
+      case 'finish-shop': {
+        const n = Object.values(S.list).filter(x => x.c).length;
+        if (!confirm(`Spesa fatta? Tolgo dalla lista i ${n} prodotti spuntati (restano tra i "Comprati di recente").`)) break;
+        finishShopping(); toast('Lista aggiornata 👍'); render(); break;
+      }
+      case 'catalog': openCatalog(); break;
+      case 'cat-toggle': {
+        const ex = inList(el.dataset.t);
+        if (ex) removeFromList(ex[0]); else addToList(el.dataset.t, el.dataset.r);
+        if (catQuery) catQuery = '';
+        refreshCatalog(false); render(); break;
+      }
+      case 'share': shareText(shopText(), 'Lista copiata: incollala su WhatsApp'); break;
+      case 'rfilter': recipeFilter.p = el.dataset.p; render(); break;
+      case 'flag': { const id = el.dataset.id, f = el.dataset.f; S.flags[id] === f ? delete S.flags[id] : (S.flags[id] = f); save(); Sync.settings(); render(); break; }
+      case 'recipe': openRecipe(el.dataset.id); break;
+      case 'new-recipe': openRecipeEditor(null); break;
+      case 'edit-recipe': openRecipeEditor(el.dataset.id); break;
+      case 'del-recipe': if (confirm(MC_RECIPES.some(x => x.id === el.dataset.id) ? 'Ripristino la ricetta originale?' : 'Elimino questa ricetta?')) {
+        S.customRecipes = S.customRecipes.filter(r => r.id !== el.dataset.id); save(); Sync.settings(); closeModal(); render(); } break;
+      case 'rep-up': case 'rep-down': {
+        const i = +el.dataset.i, j = a === 'rep-up' ? i - 1 : i + 1;
+        if (j < 0 || j >= S.reparti.length) break;
+        [S.reparti[i], S.reparti[j]] = [S.reparti[j], S.reparti[i]]; save(); Sync.settings(); render(); break;
+      }
+      case 'grande-paste': openModal(`
+        <form data-form="grande" class="space-y-3">
+          <div class="flex items-center justify-between"><div class="font-serif text-lg font-bold">Incolla il menù della scuola</div>${closeBtn}</div>
+          <p class="text-xs text-muted">Serve solo se l'aggiornamento automatico non funziona. Apri il sito della scuola, seleziona il testo del menù (da "MENU…" all'ultimo venerdì), copia e incolla qui.</p>
+          <textarea name="t" rows="10" class="w-full ${inputCls}"></textarea>
+          <button class="w-full ${btnPrimary}">Leggi menù</button>
+        </form>`); break;
+      case 'family-create': if (confirm('Creo il codice famiglia e carico su questo telefono la settimana e la lista attuali?')) {
+        S.family = newFamilyCode(); save(); render(); await Sync.start(); render(); } break;
+      case 'family-share': shareText(`🍽️ MenuCasa: apri questo link per collegare il telefono al nostro menù della settimana\n${familyLink()}`, 'Link copiato: incollalo su WhatsApp'); break;
+      case 'family-leave': if (confirm('Scollego questo telefono? Resta una copia dei dati attuali, ma non si aggiornerà più.')) { Sync.stop(); S.family = null; save(); render(); } break;
+      case 'export': {
+        const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
+        const u = URL.createObjectURL(blob); const l = document.createElement('a');
+        l.href = u; l.download = `menucasa-backup-${todayIso()}.json`; l.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); break;
+      }
+      case 'reset': if (confirm('Cancello da questo telefono piani, liste, ricette personali e impostazioni? (Se sei collegato alla famiglia, i dati condivisi restano.)')) {
+        Sync.stop(); localStorage.removeItem(STORE_KEY); load(); render(); toast('Azzerato'); } break;
+    }
+  });
+
+  document.addEventListener('submit', (ev) => {
+    const f = ev.target.closest('[data-form]'); if (!f) return;
+    ev.preventDefault();
+    const fd = new FormData(f); const kind = f.dataset.form;
+    if (kind === 'cat-add') {
+      const t = (fd.get('t') || '').trim(); if (!t) return;
+      const hit = knownProducts().find(c => c.t.toLowerCase() === t.toLowerCase());
+      addToList(hit?.t || t, hit?.r); catQuery = ''; toast(`Aggiunto: ${hit?.t || t}`);
+      refreshCatalog(true); render();
+    } else if (kind === 'paste-list') {
+      const names = parsePastedList(fd.get('t') || '');
+      let n = 0; names.forEach(t => { if (!inList(t)) { addToList(t); n++; } });
+      toast(n ? `Aggiunti ${n} prodotti` : 'Niente di nuovo da aggiungere'); refreshCatalog(false); render();
+    } else if (kind === 'custom') {
+      const t = (fd.get('t') || '').trim(); if (!t) return;
+      const d = f.dataset.d, slot = f.dataset.slot;
+      setEntry(d, slot, { custom: t, locked: true }); save(); Sync.days([d]); closeModal(); render();
+    } else if (kind === 'recipe') {
+      const id = f.dataset.id || ('u-' + uid());
+      const r = { id, n: fd.get('n').trim(), p: fd.get('p'), c: fd.get('c'), ing: parseIngredients(fd.get('ing') || ''), custom: true };
+      if (fd.get('s')) r.s = 'p';
+      const orig = recipeById(id); if (orig?.link) r.link = orig.link; if (orig?.fish) r.fish = orig.fish;
+      S.customRecipes = S.customRecipes.filter(x => x.id !== id).concat(r); save(); Sync.settings(); closeModal(); render(); toast('Ricetta salvata');
+    } else if (kind === 'grande') {
+      const weeks = parseGrandeText(fd.get('t') || '');
+      const n = Object.keys(weeks).length;
+      if (!n) { toast('Non trovo settimane: hai copiato anche le righe "dal … al …"?'); return; }
+      Object.assign(S.pastedGrande, weeks); save(); Sync.settings(); closeModal(); render(); toast(`Lette ${n} settimane`);
+    } else if (kind === 'join') {
+      joinFamily(fd.get('c'), false);
+    }
+  });
+
+  document.addEventListener('input', (ev) => {
+    const el = ev.target.closest('[data-input]'); if (!el) return;
+    if (el.dataset.input === 'rsearch') {
+      recipeFilter.q = el.value; render();
+      const i = $('[data-input="rsearch"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+    } else if (el.dataset.input === 'csearch') {
+      catQuery = el.value; refreshCatalog(true);
+    }
+  });
+  document.addEventListener('change', async (ev) => {
+    const el = ev.target.closest('[data-input]'); if (!el) return;
+    switch (el.dataset.input) {
+      case 'piccolo-week': S.piccolo.anchorMonday = iso(mondayOf(new Date())); S.piccolo.anchorWeek = +el.value; save(); Sync.settings(); toast(`Nido: settimana ${el.value}`); render(); break;
+      case 'piccolo-season': S.piccolo.season = el.value; save(); Sync.settings(); render(); break;
+      case 'people': S.people = Math.max(1, Math.min(12, +el.value || 4)); save(); Sync.settings(); break;
+      case 'import': {
+        const file = el.files[0]; if (!file) return;
+        try {
+          const data = JSON.parse(await file.text()); if (!data.plan) throw 0;
+          const fam = S.family; S = Object.assign(DEFAULT_STATE(), data, { family: fam }); save();
+          Sync.settings(); Sync.days(Object.keys(S.plan)); render(); toast('Backup importato');
+        } catch { toast('File non valido'); }
+        break;
+      }
+    }
+  });
+
+  // =====================================================================
+  //  Avvio
+  // =====================================================================
+  (async () => {
+    load();
+    const m = location.hash.match(/famiglia=([A-Za-z0-9-]+)/);
+    history.replaceState(null, '', location.pathname + location.search);
+    await loadMenus();
+    render();
+    if (m) await joinFamily(m[1], true);
+    else Sync.start();
+  })();
+  </script>
+</body>
+</html>

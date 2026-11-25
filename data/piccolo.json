@@ -1,0 +1,85 @@
+{
+ "school": "Nido (1-3 anni)",
+ "note": "4 settimane a rotazione. Ancora: la settimana che inizia il 2026-11-23 è la settimana 4.",
+ "anchor": { "monday": "2026-11-23", "week": 4 },
+ "seasons": {
+  "ai": {
+   "name": "Autunno/Inverno",
+   "pranzo": [
+    [
+     ["Minestra di legumi con riso", "Uova strapazzate", "Patate al forno"],
+     ["Pasta al pomodoro", "Crocchette di merluzzo gratinate al forno", "Finocchio"],
+     ["Pasta e ceci", "Cavolfiore gratinato al forno", "Cappuccio"],
+     ["Crema di carote con riso", "Bocconcini di pollo", "Carote cotte all'olio"],
+     ["Pasta radicchio e noci", "Asiago", "Spinaci cotti all'olio"]
+    ],
+    [
+     ["Pasta con broccoli", "Filetto di platessa dorata al forno", "Spinaci cotti all'olio"],
+     ["Risotto con crema di spinaci", "Frittata", "Cavolfiore gratinato al forno"],
+     ["Pasta e fagioli", "Patate al forno", "Carote cotte all'olio"],
+     ["Pastina in brodo di carne", "Bollito di manzo con salsa di pane", "Cappuccio"],
+     ["Riso all'olio EVO e grana", "Cotoletta di pollo", "Finocchio al latte"]
+    ],
+    [
+     ["Risotto alla zucca", "Stracchino", "Bieta cotta all'olio"],
+     ["Pasta e fagioli", "Carote", "Cavolfiore gratinato al forno"],
+     ["Passato di verdure invernali con pastina", "Filetto di platessa dorata al forno", "Finocchio gratinato al forno"],
+     ["Bocconcini di tacchino con piselli e patate", "Carote cotte all'olio"],
+     ["Minestra di legumi con riso", "Frittata", "Spinaci cotti all'olio"]
+    ],
+    [
+     ["Pasta al ragù di pesce (merluzzo)", "Carote", "Morbidelle di verdure invernali"],
+     ["Pasta al pomodoro e ricotta", "Spinaci cotti all'olio", "Cavolfiore gratinato al forno"],
+     ["Crema di patate e zucca con crostini", "Burger di lenticchie e verdure", "Finocchio"],
+     ["Risotto al radicchio", "Polpettine di manzo in umido", "Carote cotte all'olio"],
+     ["Pasta all'ortolana", "Straccetti di pollo dorati al mais", "Finocchio al latte"]
+    ]
+   ],
+   "merenda": [
+    ["Yogurt bianco", "Pane con marmellata", "Yogurt bianco", "Macedonia di frutta fresca invernale", "Pane e frutta di stagione invernale"],
+    ["Yogurt bianco", "Torta allo yogurt", "Pane e frutta di stagione invernale", "Fette biscottate con marmellata", "Yogurt bianco"],
+    ["Yogurt bianco", "Macedonia di frutta fresca invernale", "Yogurt bianco", "Torta di mele", "Pane e frutta di stagione invernale"],
+    ["Yogurt bianco", "Torta allo yogurt", "Pane e frutta di stagione invernale", "Yogurt bianco", "Infuso alla frutta, fette biscottate con marmellata"]
+   ]
+  },
+  "pe": {
+   "name": "Primavera/Estate",
+   "pranzo": [
+    [
+     ["Pasta al pomodoro e ricotta", "Fagiolini cotti all'olio", "Morbidelle di verdure estive"],
+     ["Minestra d'orzo e fagioli", "Frittata", "Pomodoro"],
+     ["Riso al pomodoro", "Crocchette di merluzzo gratinate al forno", "Zucchine cotte all'olio"],
+     ["Crema di carote con riso", "Bocconcini di pollo", "Cetrioli"],
+     ["Pasta all'olio EVO e grana", "Pepite di pesce dorate al mais", "Spinaci cotti all'olio"]
+    ],
+    [
+     ["Pasta al ragù di pesce (platessa)", "Morbidelle di verdure estive", "Carote"],
+     ["Minestrone estivo", "Polpette di legumi", "Fagiolini cotti all'olio"],
+     ["Risotto ai porri", "Petto di pollo alla salvia", "Pomodoro"],
+     ["Pasta al pesto", "Filetto di platessa dorata al forno", "Spinaci cotti all'olio"],
+     ["Riso al pomodoro", "Polpettine di manzo in umido", "Cetrioli"]
+    ],
+    [
+     ["Crema di carote con orzo", "Polpettine di pesce", "Melanzane al funghetto"],
+     ["Pasta alla pizzaiola", "Robiola", "Cetrioli"],
+     ["Riso con lenticchie", "Pomodoro", "Zucchine gratinate"],
+     ["Pasta al pomodoro", "Scaloppine di tacchino al limone", "Fagiolini cotti all'olio"],
+     ["Minestra di legumi con riso", "Uova sode", "Carote cotte all'olio"]
+    ],
+    [
+     ["Risotto agli asparagi", "Filetto di platessa al limone", "Fagiolini cotti all'olio"],
+     ["Pasta all'olio EVO e grana", "Piselli al pomodoro", "Cetrioli"],
+     ["Risotto con zucchine", "Spezzatino di tacchino con verdure", "Pomodoro"],
+     ["Pasta al ragù di manzo", "Carote cotte all'olio", "Cappuccio"],
+     ["Pasta al pomodoro e ricotta", "Crocchette di melanzane", "Pomodoro"]
+    ]
+   ],
+   "merenda": [
+    ["Yogurt bianco", "Macedonia di frutta fresca estiva", "Yogurt bianco", "Fette biscottate con marmellata, infuso alla frutta", "Pane e frutta di stagione estiva"],
+    ["Yogurt bianco", "Macedonia di frutta fresca estiva", "Yogurt bianco", "Gelato fior di latte", "Frutta fresca estiva"],
+    ["Yogurt bianco", "Fette biscottate e frutta di stagione estiva", "Yogurt bianco", "Torta allo yogurt e cioccolato", "Frutta fresca estiva"],
+    ["Yogurt bianco", "Torta di mele", "Yogurt bianco", "Pane con marmellata", "Frutta fresca estiva"]
+   ]
+  }
+ }
+}

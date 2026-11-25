@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#F6F0E6"/>
+  <!-- piatto -->
+  <circle cx="256" cy="268" r="148" fill="#FFFDF9" stroke="#D4643B" stroke-width="22"/>
+  <circle cx="256" cy="268" r="104" fill="#FBE6DC"/>
+  <!-- forchetta e coltello -->
+  <g fill="#3B2F26">
+    <rect x="70" y="116" width="14" height="84" rx="7"/>
+    <rect x="97" y="116" width="14" height="84" rx="7"/>
+    <rect x="124" y="116" width="14" height="84" rx="7"/>
+    <path d="M70 188 h68 v16 a34 34 0 0 1 -27 33 v161 a7 7 0 0 1 -14 0 v-161 a34 34 0 0 1 -27 -33 z"/>
+    <path d="M428 116 c-32 22 -44 74 -40 124 h26 v158 a7 7 0 0 0 14 0 z"/>
+  </g>
+  <!-- foglia -->
+  <path d="M206 318 C206 238 262 204 320 206 C322 268 290 318 206 318 Z" fill="#6F8F60"/>
+  <path d="M214 310 C246 276 272 252 304 224" stroke="#FBE6DC" stroke-width="9" fill="none" stroke-linecap="round"/>
+</svg>
