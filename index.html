@@ -456,7 +456,10 @@
   }
   function weekDays(monday) { return [...Array(7)].map((_, i) => iso(addDays(monday, i))); }
   const entry = (d, slot) => S.plan[d]?.[slot] || null;
-  function entryRecipe(e) { return e && e.id && !SPECIAL[e.id] ? recipeById(e.id) : null; }
+  function entryRecipe(e) {
+    if (e && e.custom) return (e.p || e.c) ? { id: 'custom:' + e.custom.toLowerCase(), n: e.custom, p: e.p || '', c: e.c || '', ing: [] } : null;
+    return e && e.id && !SPECIAL[e.id] ? recipeById(e.id) : null;
+  }
   function setEntry(d, slot, val) {
     S.plan[d] = S.plan[d] || {};
     if (val) S.plan[d][slot] = val; else delete S.plan[d][slot];
@@ -467,7 +470,7 @@
     weekDays(monday).forEach(d => slotsOf(d).forEach(slot => {
       if (exclude && exclude[0] === d && exclude[1] === slot) return;
       const r = entryRecipe(entry(d, slot));
-      if (r) { c[r.p] = (c[r.p] || 0) + 1; used.add(r.id); if (r.c === 'pizza') c._pizza = (c._pizza || 0) + 1; }
+      if (r) { if (r.p) c[r.p] = (c[r.p] || 0) + 1; used.add(r.id); if (r.c === 'pizza') c._pizza = (c._pizza || 0) + 1; }
     }));
     return { c, used };
   }
@@ -498,7 +501,7 @@
     } else {
       if (r.s === 'p') { s += 15; why.push('piatto da pranzo'); } else s -= 5;
     }
-    if (ctx.prev && group(ctx.prev.p) === g) { s -= 30; bad.push('stessa proteina del pasto prima'); }
+    if (ctx.prev?.p && group(ctx.prev.p) === g) { s -= 30; bad.push('stessa proteina del pasto prima'); }
     if (ctx.used.has(r.id)) { s -= 200; bad.push('già in settimana'); }
     else if (ctx.recent.has(r.id)) { s -= 70; bad.push('fatto da poco'); }
     const n = ctx.counts[r.p] || 0; const [min, max] = TARGET[r.p] || [0, 9];
@@ -512,7 +515,7 @@
   function contextFor(d, slot) {
     const lunch = slot === 'cena' && slotsOf(d).includes('pranzo')
       ? (() => { const r = entryRecipe(entry(d, 'pranzo')); const o = { tags: new Set(), primo: false, pizza: false, kids: [] };
-                 if (r) { o.tags.add(group(r.p)); o.primo = ['pasta', 'riso', 'pizza'].includes(r.c); o.pizza = r.c === 'pizza'; o.kids = ['casa']; } return o; })()
+                 if (r) { if (r.p) o.tags.add(group(r.p)); o.primo = ['pasta', 'riso', 'pizza'].includes(r.c); o.pizza = r.c === 'pizza'; o.kids = ['casa']; } return o; })()
       : lunchInfo(d);
     const { c, used } = weekCounts(mondayOf(parseIso(d)), [d, slot]);
     return { lunch, counts: c, used, prev: prevMeal(d, slot), recent: recentlyUsed(d, 10), dow: dowOf(parseIso(d)) };
@@ -682,7 +685,10 @@
     } else if (SPECIAL[e.id]) {
       body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left text-sm font-semibold">${SPECIAL[e.id].e} ${SPECIAL[e.id].n}</button>`;
     } else if (e.custom) {
-      body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left text-sm font-semibold">✏️ ${esc(e.custom)}</button>`;
+      body = `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left min-w-0">
+          <div class="text-sm font-bold text-ink leading-snug">✏️ ${esc(e.custom)}</div>
+          ${(e.p || e.c) ? `<div class="flex flex-wrap items-center gap-1 mt-1">${chip(e.p, true)}${e.c ? `<span class="text-[10px] font-bold text-muted">${C_INFO[e.c] || ''}</span>` : ''}</div>` : ''}
+        </button>`;
     } else {
       const r = recipeById(e.id);
       body = r ? `<button data-action="choose" data-d="${d}" data-slot="${slot}" class="flex-1 text-left min-w-0">
@@ -1004,6 +1010,7 @@
     const list = ranked(d, slot);
     const lunch = slot === 'cena' ? contextFor(d, slot).lunch : null;
     const good = list.filter(x => x.s > -50);
+    const cur = entry(d, slot)?.custom ? entry(d, slot) : null;
     const rest = list.filter(x => x.s <= -50 && x.s > -1e8);
     const row = x => `<li><button data-action="set" data-d="${d}" data-slot="${slot}" data-id="${x.r.id}" class="w-full text-left bg-cream hover:bg-sand border border-line rounded-2xl px-3 py-2">
         <div class="flex items-center justify-between gap-2"><span class="text-sm font-bold">${esc(x.r.n)}</span>${chip(x.r.p, true)}</div>
@@ -1018,9 +1025,16 @@
       <div class="grid grid-cols-2 gap-2 mb-3">
         ${Object.entries(SPECIAL).map(([k, v]) => `<button data-action="set" data-d="${d}" data-slot="${slot}" data-id="${k}" class="bg-butter/20 hover:bg-butter/30 rounded-2xl px-3 py-2 text-sm font-semibold text-left">${v.e} ${v.n}</button>`).join('')}
       </div>
-      <form data-form="custom" data-d="${d}" data-slot="${slot}" class="flex gap-2 mb-4">
-        <input name="t" placeholder="Oppure scrivi tu (es. toast e minestra)" class="flex-1 min-w-0 ${inputCls}">
-        <button class="w-10 h-10 rounded-full bg-sage text-white shrink-0"><i class="fa-solid fa-check"></i></button>
+      <form data-form="custom" data-d="${d}" data-slot="${slot}" class="bg-cream/70 border border-line rounded-2xl p-2.5 mb-4 space-y-2">
+        <div class="flex gap-2">
+          <input name="t" required value="${esc(cur?.custom || '')}" placeholder="Oppure scrivi tu (es. toast e minestra)" class="flex-1 min-w-0 ${inputCls} bg-card">
+          <button class="w-10 h-10 rounded-full bg-sage text-white shrink-0" title="Usa questo pasto"><i class="fa-solid fa-check"></i></button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select name="p" class="${inputCls} bg-card text-ink" aria-label="Proteina"><option value="">Proteina…</option>${Object.entries(P_INFO).map(([k, v]) => `<option value="${k}" ${cur?.p === k ? 'selected' : ''}>${v.e} ${v.l}</option>`).join('')}</select>
+          <select name="c" class="${inputCls} bg-card text-ink" aria-label="Base"><option value="">Base…</option>${Object.entries(C_INFO).map(([k, v]) => `<option value="${k}" ${cur?.c === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-muted px-1"><input type="checkbox" name="save" class="accent-[#D4643B]"> Salva anche nel ricettario (poi puoi aggiungere gli ingredienti)</label>
       </form>
       <div class="text-xs font-bold uppercase tracking-wide text-sagedk mb-1.5">Consigliate</div>
       <ul class="space-y-1.5 mb-4">${good.map(row).join('') || '<li class="text-sm text-muted">Nessuna proposta perfetta: guarda sotto.</li>'}</ul>
@@ -1224,7 +1238,17 @@
     } else if (kind === 'custom') {
       const t = (fd.get('t') || '').trim(); if (!t) return;
       const d = f.dataset.d, slot = f.dataset.slot;
-      setEntry(d, slot, { custom: t, locked: true }); save(); Sync.days([d]); closeModal(); render();
+      const p = fd.get('p') || '', c = fd.get('c') || '';
+      if (fd.get('save')) {
+        const r = { id: 'u-' + uid(), n: t.charAt(0).toUpperCase() + t.slice(1), p: p || 'verdure', c: c || 'pane', ing: [], custom: true };
+        if (slot === 'pranzo') r.s = 'p';
+        S.customRecipes = S.customRecipes.concat(r); Sync.settings();
+        setEntry(d, slot, { id: r.id, locked: true }); toast('Salvata nel ricettario');
+      } else {
+        const e = { custom: t, locked: true }; if (p) e.p = p; if (c) e.c = c;
+        setEntry(d, slot, e);
+      }
+      save(); Sync.days([d]); closeModal(); render();
     } else if (kind === 'recipe') {
       const id = f.dataset.id || ('u-' + uid());
       const r = { id, n: fd.get('n').trim(), p: fd.get('p'), c: fd.get('c'), ing: parseIngredients(fd.get('ing') || ''), custom: true };
