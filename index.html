@@ -179,11 +179,23 @@
   const CAT_BY = new Map(CAT.map(c => [c.t.toLowerCase(), c]));
   const catFind = t => CAT_BY.get(String(t).toLowerCase().trim()) || null;
   const histKey = t => String(t).toLowerCase().trim().replace(/[^a-z0-9àèéìòù]+/g, '_');
+  // Icona di un prodotto: confronta le parole "radice" (senza singolare/plurale) con il catalogo.
+  // 1) nome identico  2) il prodotto del catalogo più lungo con cui il nome comincia ("Pasta corta" -> Pasta)
+  // 3) una parola del nome che è un prodotto del catalogo ("Cosce di pollo" -> Pollo) o ne è la prima parola ("Tonno" -> Tonno in scatola)  4) icona del reparto
+  const STOP = new Set(['di', 'del', 'della', 'dei', 'delle', 'a', 'al', 'alla', 'ai', 'e', 'in', 'con', 'per', 'da', 'su']);
+  const EMOJI_ALIAS = { polp: 'polip', calamar: 'totan' };
+  const stemsOf = t => String(t).toLowerCase().replace(/sott['’ ]?olio/g, '').replace(/[^a-zàèéìòù]+/g, ' ').trim().split(' ')
+    .filter(w => w && !STOP.has(w)).map(w => { const x = w.length > 3 ? w.replace(/[aeiouàèéìòù]$/, '') : w; return EMOJI_ALIAS[x] || x; });
+  const CAT_STEMS = CAT.map(c => ({ c, st: stemsOf(c.t) })).filter(x => x.st.length);
+  const emojiCache = new Map();
   function emojiOf(t, r) {
     const c = catFind(t); if (c) return c.e;
-    const w = String(t).toLowerCase().split(/\s+/)[0];
-    const p = CAT.find(x => x.t.toLowerCase().startsWith(w));
-    return p ? p.e : (MC_REPARTI.find(x => x[0] === r)?.[2] || '🛒');
+    const key = `${String(t).toLowerCase()}|${r}`; if (emojiCache.has(key)) return emojiCache.get(key);
+    const st = stemsOf(t); let best = null;
+    CAT_STEMS.forEach(x => { if (x.st.length <= st.length && x.st.every((w, i) => w === st[i]) && (!best || x.st.length > best.st.length)) best = x; });
+    if (!best) best = CAT_STEMS.find(x => x.st.length === 1 && st.includes(x.st[0])) || CAT_STEMS.find(x => st.includes(x.st[0]));
+    const e = best ? best.c.e : (MC_REPARTI.find(x => x[0] === r)?.[2] || '🛒');
+    emojiCache.set(key, e); return e;
   }
   // reparti: se l'ordine è ancora quello vecchio di default passa a quello delle corsie; i reparti nuovi si inseriscono al loro posto
   function fixReparti() {

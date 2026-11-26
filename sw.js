@@ -1,5 +1,5 @@
 // Cambia la versione ogni volta che vuoi forzare la pulizia della cache.
-const CACHE = 'menucasa-v5';
+const CACHE = 'menucasa-v6';
 
 const APP_FILES = [
   './',

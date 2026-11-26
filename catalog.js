@@ -3,12 +3,12 @@
 window.MC_CATALOG = {
   ortofrutta: [
     'Mele|🍎', 'Banane|🍌', 'Pere|🍐', 'Arance|🍊', 'Mandarini|🍊', 'Limoni|🍋', 'Lime|🍋', 'Pompelmo|🍊', 'Kiwi|🥝', 'Uva|🍇',
-    'Fragole|🍓', 'Ciliegie|🍒', 'Albicocche|🍑', 'Pesche|🍑', 'Pesche noci|🍑', 'Prugne|🫐', 'Susine|🫐', 'Lamponi|🫐',
+    'Fragole|🍓', 'Ciliegie|🍒', 'Albicocche|🍑', 'Pesche|🍑', 'Pesche noci|🍑', 'Prugne|🟣', 'Susine|🟣', 'Lamponi|🍓',
     'More|🫐', 'Mirtilli|🫐', 'Melone|🍈', 'Anguria|🍉', 'Ananas|🍍', 'Mango|🥭', 'Cachi|🟠', 'Fichi|🟣', 'Datteri|🟤',
     'Castagne|🌰', 'Avocado|🥑', 'Frutta|🧺', 'Insalata|🥬', 'Rucola|🥬', 'Radicchio|🥬', 'Spinaci|🥬', 'Cime di rapa|🥬',
     'Pomodori|🍅', 'Pomodorini|🍅', 'Zucchine|🥒', 'Cetrioli|🥒', 'Carote|🥕', 'Patate|🥔', 'Cipolle|🧅', 'Cipollotti|🧅',
     'Porri|🧅', 'Aglio|🧄', 'Peperoni|🫑', 'Peperoncini|🌶️', 'Melanzane|🍆', 'Broccoli|🥦', 'Cavolfiore|🥦', 'Finocchi|🌿',
-    'Sedano|🌿', 'Asparagi|🌿', 'Carciofi|🌿', 'Fagiolini|🫛', 'Zucca|🎃', 'Funghi champignon|🍄', 'Funghi porcini|🍄',
+    'Sedano|🥬', 'Asparagi|🌿', 'Carciofi|🌿', 'Fagiolini|🫛', 'Zucca|🎃', 'Funghi champignon|🍄', 'Funghi porcini|🍄',
     'Mais|🌽', 'Zenzero|🫚', 'Basilico|🌿', 'Prezzemolo|🌿', 'Rosmarino|🌿', 'Salvia|🌿', 'Menta|🌿', 'Timo|🌿',
     'Erba cipollina|🌿', 'Rabarbaro|🌿', 'Verdure|🥗'
   ],
@@ -46,7 +46,7 @@ window.MC_CATALOG = {
   dolci: [
     'Biscotti|🍪', 'Biscotti cioccolato Esselunga|🍪', 'Biscotti del grande|🍪', 'Merendine|🧁', 'Barrette ai cereali|🍫',
     'Cioccolato|🍫', 'Crema gianduia|🍫', 'Marmellata|🍯', 'Miele|🍯', 'Composta di mele|🍎', 'Torta|🍰', 'Patatine|🥔',
-    'Popcorn|🍿', 'Snack|🥨', 'Noci|🌰', 'Nocciole|🌰', 'Mandorle|🌰', 'Arachidi|🥜', 'Gomme da masticare|🍬', 'Caffè|☕',
+    'Popcorn|🍿', 'Snack|🥨', 'Noci|🥜', 'Nocciole|🥜', 'Mandorle|🥜', 'Arachidi|🥜', 'Gomme da masticare|🍬', 'Caffè|☕',
     'Caffè in grani|☕', 'Capsule caffè|☕', 'Cialde caffè|☕', 'Tè|🍵', 'Crackers|🍘', 'Fette biscottate|🍞', 'Grissini|🥖'
   ],
   casa: [
