@@ -263,7 +263,7 @@
         const plan = {}; q.forEach(doc => { plan[doc.id] = doc.data(); }); S.plan = plan; this.changed('days', q);
       }, e => this.fail(e)));
       this.unsub.push(fs.onSnapshot(fs.collection(this.root, 'shop'), opt, q => {
-        const shop = {}; q.forEach(doc => { const v = doc.data(); shop[doc.id] = { checked: v.checked || {} }; }); S.shop = shop; this.changed('shop', q);
+        const shop = {}; q.forEach(doc => { const v = doc.data(); shop[doc.id] = { checked: v.checked || {}, removed: v.removed || {} }; }); S.shop = shop; this.changed('shop', q);
       }, e => this.fail(e)));
       this.unsub.push(fs.onSnapshot(fs.doc(this.root, 'misc', 'list'), opt, s => {
         const v = s.exists() ? s.data() : {};
@@ -304,6 +304,11 @@
       this.fs.setDoc(this.fs.doc(this.root, 'shop', week), patch, { merge: true }).catch(e => this.fail(e));
     },
     shopCheck(week, key, val) { if (this.on) this.shopPatch(week, { checked: { [key]: val ? true : this.fs.deleteField() } }); },
+    shopRemoved(week, key, val) { if (this.on) this.shopPatch(week, { removed: { [key]: val ? true : this.fs.deleteField() } }); },
+    shopReplaceRemoved(week) {
+      if (!this.on) return;
+      this.fs.setDoc(this.fs.doc(this.root, 'shop', week), { removed: {} }, { mergeFields: ['removed'] }).catch(e => this.fail(e));
+    },
     shopReplaceChecked(week) {
       if (!this.on) return;
       this.fs.setDoc(this.fs.doc(this.root, 'shop', week), { checked: {} }, { mergeFields: ['checked'] }).catch(e => this.fail(e));
@@ -595,13 +600,15 @@
     const k = iso(monday);
     S.shop[k] = S.shop[k] || { checked: {} };
     S.shop[k].checked ||= {};
+    S.shop[k].removed ||= {};
     return S.shop[k];
   }
   // tutto quello che va comprato: ingredienti delle cene della settimana + lista sempre aperta
   function shopAll(monday) {
     const listed = Object.entries(S.list).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0))
       .map(([id, x]) => ({ key: `l:${id}`, name: x.t, rep: catFind(x.t)?.r || x.r || 'altro', q: 0, u: '', listId: id, note: x.note }));
-    return [...shopItems(monday).filter(i => i.rep !== 'base'), ...listed];
+    const removed = shopState(monday).removed;
+    return [...shopItems(monday).filter(i => i.rep !== 'base' && !removed[i.key]), ...listed];
   }
   const isChecked = (i, st) => i.listId ? !!S.list[i.listId]?.c : !!st.checked[i.key];
 
@@ -794,6 +801,8 @@
     const todo = all.filter(i => !isChecked(i, st)).length;
     const inCart = Object.values(S.list).filter(x => x.c).length;
     const ds = shopDays(weekStart);
+    const recKeys = new Set(shopItems(weekStart).map(i => i.key));
+    const nRemoved = Object.keys(st.removed).filter(k => recKeys.has(k)).length;
     const pct = all.length ? Math.round((all.length - todo) / all.length * 100) : 0;
 
     let h = card(`<div class="p-4 space-y-3">
@@ -811,6 +820,7 @@
       <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
         <label class="flex items-center gap-1.5"><input type="checkbox" class="accent-[#D4643B]" data-action="toggle-show" ${S.showChecked ? 'checked' : ''}> mostra già presi</label>
         <label class="flex items-center gap-1.5"><input type="checkbox" class="accent-[#D4643B]" data-action="toggle-past" ${S.shopPast ? 'checked' : ''}> anche cene passate</label>
+        ${nRemoved ? `<button data-action="restore-removed" class="underline">rimetti i ${nRemoved} tolti</button>` : ''}
         <button data-action="uncheck-all" class="underline ml-auto">togli spunte</button>
       </div>
     </div>`);
@@ -832,8 +842,9 @@
                 ${i.note ? `<span class="text-xs font-bold text-accentdk ml-1">${esc(i.note)}</span>` : ''}
                 ${i.uses ? `<span class="block text-[10px] text-muted truncate">${i.uses.join(', ')}</span>` : ''}</span>
             </label>
-            ${i.listId ? `<button data-action="note" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Nota (quantità, marca…)"><i class="fa-solid fa-pen text-xs"></i></button>
-              <button data-action="del-item" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Togli dalla lista"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            ${i.listId ? `<button data-action="note" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Quantità o nota (marca…)"><i class="fa-solid fa-pen text-xs"></i></button>
+              <button data-action="del-item" data-id="${esc(i.listId)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Togli dalla lista"><i class="fa-solid fa-xmark"></i></button>`
+              : `<button data-action="del-rec-item" data-key="${esc(i.key)}" class="text-muted w-8 h-8 rounded-full hover:bg-sand shrink-0" title="Togli dalla lista (ce l'ho già)"><i class="fa-solid fa-xmark"></i></button>`}
           </li>`).join('')}</ul>`, 'overflow-hidden');
     });
 
@@ -858,7 +869,7 @@
   }
 
   // ---------- Catalogo (finestra "Aggiungi prodotti") ----------
-  let catQuery = ''; let catIsOpen = false; const catOpen = new Set();
+  let catQuery = ''; let catQty = ''; let catIsOpen = false; const catOpen = new Set();
   function catTile(t, e, r, sub) {
     const on = !!inList(t);
     return `<button type="button" data-action="cat-toggle" data-t="${esc(t)}" data-r="${esc(r)}" class="rounded-2xl px-1 pt-2 pb-1.5 text-center border transition ${on ? 'bg-accent border-accent text-white shadow-soft' : 'bg-cream border-line hover:bg-sand'}">
@@ -882,8 +893,10 @@
         <button type="button" data-action="close-modal" class="px-4 h-9 rounded-full bg-ink text-paper text-sm font-bold">Fatto · ${n} in lista</button></div>
       <form data-form="cat-add" class="flex gap-2">
         <input data-input="csearch" name="t" value="${esc(catQuery)}" autocomplete="off" placeholder="Cerca o scrivi un prodotto…" class="flex-1 min-w-0 ${inputCls}">
+        <input data-input="cqty" name="q" value="${esc(catQty)}" autocomplete="off" placeholder="Quantità" aria-label="Quantità" class="w-24 shrink-0 ${inputCls}">
         <button class="w-10 h-10 rounded-full bg-sage text-white shrink-0" title="Aggiungi"><i class="fa-solid fa-plus"></i></button>
-      </form></div>`;
+      </form>
+      <p class="text-[11px] text-muted mt-1.5">Scrivi la quantità (es. 2, 1 kg, 6 vasetti) prima di toccare il prodotto: va solo su quello che aggiungi.</p></div>`;
     if (q) {
       const res = knownProducts().filter(c => c.t.toLowerCase().includes(q))
         .sort((a, b) => a.t.toLowerCase().indexOf(q) - b.t.toLowerCase().indexOf(q) || a.t.localeCompare(b.t)).slice(0, 40);
@@ -912,7 +925,7 @@
       <button class="w-full ${btnSoft}">Aggiungi tutti</button></form></details>`;
     return h;
   }
-  function openCatalog() { catQuery = ''; openModal(catalogBody()); catIsOpen = true; }
+  function openCatalog() { catQuery = ''; catQty = ''; openModal(catalogBody()); catIsOpen = true; }
   function refreshCatalog(keepFocus) {
     if (!catIsOpen || $('#modal').classList.contains('hidden')) { catIsOpen = false; return; }
     const a = document.activeElement;
@@ -1194,6 +1207,11 @@
         save(); render(); break;
       }
       case 'del-item': removeFromList(el.dataset.id); render(); break;
+      case 'del-rec-item': {
+        const k = el.dataset.key; shopState(weekStart).removed[k] = true;
+        save(); Sync.shopRemoved(week, k, true); render(); toast('Tolto dalla lista'); break;
+      }
+      case 'restore-removed': shopState(weekStart).removed = {}; save(); Sync.shopReplaceRemoved(week); render(); break;
       case 'note': {
         const x = S.list[el.dataset.id]; if (!x) break;
         const n = prompt(`Nota per "${x.t}" (quantità, marca…)`, x.note || ''); if (n === null) break;
@@ -1208,7 +1226,7 @@
       case 'catalog': openCatalog(); break;
       case 'cat-toggle': {
         const ex = inList(el.dataset.t);
-        if (ex) removeFromList(ex[0]); else addToList(el.dataset.t, el.dataset.r);
+        if (ex) removeFromList(ex[0]); else { addToList(el.dataset.t, el.dataset.r, catQty.trim()); catQty = ''; }
         if (catQuery) catQuery = '';
         refreshCatalog(false); render(); break;
       }
@@ -1254,7 +1272,10 @@
     if (kind === 'cat-add') {
       const t = (fd.get('t') || '').trim(); if (!t) return;
       const hit = knownProducts().find(c => c.t.toLowerCase() === t.toLowerCase());
-      addToList(hit?.t || t, hit?.r); catQuery = ''; toast(`Aggiunto: ${hit?.t || t}`);
+      const qty = (fd.get('q') || '').trim(); const ex = inList(hit?.t || t);
+      if (ex && qty) { S.list[ex[0]].note = qty; save(); Sync.list(() => ({ items: { [ex[0]]: { note: qty } } })); }
+      else addToList(hit?.t || t, hit?.r, qty);
+      catQuery = ''; catQty = ''; toast(`Aggiunto: ${hit?.t || t}${qty ? ` (${qty})` : ''}`);
       refreshCatalog(true); render();
     } else if (kind === 'paste-list') {
       const names = parsePastedList(fd.get('t') || '');
@@ -1297,6 +1318,8 @@
       const i = $('[data-input="rsearch"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);
     } else if (el.dataset.input === 'csearch') {
       catQuery = el.value; refreshCatalog(true);
+    } else if (el.dataset.input === 'cqty') {
+      catQty = el.value;
     }
   });
   document.addEventListener('change', async (ev) => {
